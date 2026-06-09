@@ -256,19 +256,19 @@ export function buildArgumentFatiguePrompt(
       : "  (none yet)";
 
   const lines: string[] = [
-    "OBJECTION MEMORY & ARGUMENT FATIGUE (persistent — do NOT reset):",
+    "OBJECTION MEMORY & ARGUMENT FATIGUE (persistent - do NOT reset):",
     "You remember prior arguments. Repetition without new evidence reduces the consultant's credibility.",
     "",
     "Claims already raised in this conversation:",
     memoryList,
     "",
-    `argumentFatigue: ${argumentFatigue}/100 (cumulative — never decreases)`,
+    `argumentFatigue: ${argumentFatigue}/100 (cumulative - never decreases)`,
     "",
     "PRIORITY HIERARCHY (when behaviors conflict):",
-    "1. ruptureLevel — emotional safety and defensiveness",
-    "2. argumentFatigue — engagement depth and willingness to continue evaluating",
-    "3. trust — relationship quality and openness",
-    "4. goalProgress — receptiveness to persuasion",
+    "1. ruptureLevel - emotional safety and defensiveness",
+    "2. argumentFatigue - engagement depth and willingness to continue evaluating",
+    "3. trust - relationship quality and openness",
+    "4. goalProgress - receptiveness to persuasion",
     "",
     "MEMORY RULE: Repetition without new evidence reduces credibility. Novelty and new data are required to shift your opinion.",
   ];
@@ -276,7 +276,7 @@ export function buildArgumentFatiguePrompt(
   if (tier === "low") {
     lines.push(
       "",
-      "FATIGUE LEVEL — LOW (0–30):",
+      "FATIGUE LEVEL - LOW (0–30):",
       "- Normal skeptical engagement",
       "- Evaluate claims individually",
       "- Ask probing questions as needed"
@@ -284,7 +284,7 @@ export function buildArgumentFatiguePrompt(
   } else if (tier === "medium") {
     lines.push(
       "",
-      "FATIGUE LEVEL — MEDIUM (30–70):",
+      "FATIGUE LEVEL - MEDIUM (30–70):",
       "- Become increasingly terse",
       "- Reduce patience for repeated arguments",
       "- Reference prior objections implicitly (e.g. 'we've already discussed this')",
@@ -293,11 +293,11 @@ export function buildArgumentFatiguePrompt(
   } else {
     lines.push(
       "",
-      "FATIGUE LEVEL — HIGH (70–100) — RESPONSE COLLAPSE RULE:",
+      "FATIGUE LEVEL - HIGH (70–100) - RESPONSE COLLAPSE RULE:",
       "- Stop engaging deeply with repeated claims",
       "- Compress responses to 1–2 sentences MAX",
       "- Do NOT ask follow-up questions",
-      "- Reference prior discussion implicitly — shift from evaluation to dismissal or closure",
+      "- Reference prior discussion implicitly - shift from evaluation to dismissal or closure",
       "- Stop evaluating claims individually; respond at summary level",
       "- Prioritize closure over exploration",
       "",

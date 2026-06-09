@@ -1,4 +1,15 @@
 import {
+  isRelationshipNegativeAnalysis,
+} from "./signals";
+import {
+  isTerminalStatus,
+  transitionConversationStatus,
+} from "./conversationOutcome";
+import {
+  calculateExecutiveReadinessScore,
+  mergeOperationalCompletenessFromAnalysis,
+} from "./executiveReadiness";
+import {
   analyzeObjections,
   calculateFatigueIncrease,
   fatigueEvidenceMultiplier,
@@ -10,11 +21,6 @@ import {
   collaborationMultiplier,
   evidenceTrustMultiplier,
 } from "./behavioralMemory";
-import {
-  isTerminalStatus,
-  transitionConversationStatus,
-} from "./conversationOutcome";
-import { calculateReadinessScore } from "./readinessScoring";
 import { analyzeMessage } from "./signals";
 import { MessageAnalysis, Scenario, ScenarioState } from "./types";
 
@@ -36,6 +42,7 @@ export function clampState(state: ScenarioState): ScenarioState {
     goalProgress: clamp(state.goalProgress),
     conversationStatus: state.conversationStatus,
     readinessScore: clamp(state.readinessScore),
+    operationalCompleteness: { ...state.operationalCompleteness },
     argumentFatigue: clamp(state.argumentFatigue),
     objectionMemory: [...state.objectionMemory],
     relationshipTrajectory: {
@@ -46,6 +53,10 @@ export function clampState(state: ScenarioState): ScenarioState {
       escalationMemoryTurns: Math.max(
         0,
         Math.min(2, state.relationshipTrajectory.escalationMemoryTurns)
+      ),
+      negativeBehaviorStreak: Math.max(
+        0,
+        Math.min(6, state.relationshipTrajectory.negativeBehaviorStreak)
       ),
     },
   };
@@ -100,7 +111,7 @@ function applyContentQualityEffects(
   const evidenceMultiplier =
     evidenceTrustMultiplier(state) * fatigueEvidenceMultiplier(state.argumentFatigue);
 
-  if (positiveCount > 0) {
+  if (positiveCount > 0 && !isRelationshipNegativeAnalysis(analysis)) {
     next.resistance -= Math.round(4 * positiveCount * evidenceMultiplier);
     next.trust += Math.round(3 * positiveCount * evidenceMultiplier);
     next.frustration -= Math.min(Math.round(2 * positiveCount * evidenceMultiplier), 6);
@@ -134,19 +145,32 @@ function applyGoalProgressEffects(
   const collabMultiplier =
     collaborationMultiplier(state) * fatigueGoalProgressMultiplier(state.argumentFatigue);
 
+  const { metrics } = analysis;
   let goalDelta = 0;
 
-  if (goal.addressesConcerns) goalDelta += 8;
-  if (goal.providesEvidence) goalDelta += 10;
-  if (goal.acknowledgesConstraints) goalDelta += 8;
-  if (goal.discussesRoi) goalDelta += 7;
-  if (goal.answersQuestions) goalDelta += 6;
-  if (goal.demonstratesOperationalUnderstanding) goalDelta += 7;
+  if (analysis.tone.isEmpathetic) goalDelta += 12;
+  if (metrics.hasValidation) goalDelta += 10;
+  if (metrics.hasRapportBuilding) goalDelta += 8;
+  if (metrics.hasQuestion && metrics.questionCount <= 2) goalDelta += 6;
+  if (goal.addressesConcerns) goalDelta += 12;
+  if (goal.acknowledgesConstraints) goalDelta += 14;
+  if (goal.answersQuestions) goalDelta += 8;
+  if (goal.ownerDefined) goalDelta += 2;
+  if (goal.pilotScopeDefined) goalDelta += 2;
+  if (goal.rollbackExists) goalDelta += 2;
+  if (goal.kpiSetDefined) goalDelta += 2;
+  if (goal.timelineDirectionallyDefined) goalDelta += 2;
+  if (goal.providesEvidence) goalDelta += 3;
+  if (goal.demonstratesOperationalUnderstanding) goalDelta += 2;
 
   if (goal.ignoresObjections) goalDelta -= 10;
   if (goal.remainsVague) goalDelta -= 8;
   if (goal.repeatsUnsupportedClaims) goalDelta -= 12;
   if (goal.isPrematureSolutioning) goalDelta -= 9;
+
+  if (isRelationshipNegativeAnalysis(analysis)) {
+    goalDelta -= 18;
+  }
 
   if (analysis.addressesHiddenMotivation) {
     goalDelta += 12;
@@ -159,40 +183,62 @@ function applyGoalProgressEffects(
   return next;
 }
 
+function applyNegativeBehaviorStreak(
+  state: ScenarioState,
+  analysis: MessageAnalysis
+): ScenarioState {
+  const next = {
+    ...state,
+    relationshipTrajectory: { ...state.relationshipTrajectory },
+  };
+
+  if (isRelationshipNegativeAnalysis(analysis)) {
+    next.relationshipTrajectory.negativeBehaviorStreak += 1;
+    if (next.relationshipTrajectory.negativeBehaviorStreak >= 2) {
+      next.trust -= 5;
+      next.perceivedRespect -= 6;
+      next.psychologicalSafety -= 6;
+    }
+  } else if (
+    analysis.tone.isEmpathetic &&
+    (analysis.goal.acknowledgesConstraints || analysis.goal.addressesConcerns)
+  ) {
+    next.relationshipTrajectory.negativeBehaviorStreak = Math.max(
+      0,
+      next.relationshipTrajectory.negativeBehaviorStreak - 1
+    );
+  }
+
+  return next;
+}
+
 function applyToneAndRuptureEffects(
   state: ScenarioState,
   analysis: MessageAnalysis
 ): ScenarioState {
-  const { tone, contentNegative } = analysis;
+  const { tone } = analysis;
   const next = { ...state };
   const { skepticismBaseline, peakRupture } = state.relationshipTrajectory;
   const repairFactor = skepticismBaseline >= 30 ? 0.45 : skepticismBaseline >= 15 ? 0.7 : 1;
+  const relationshipNegative = isRelationshipNegativeAnalysis(analysis);
 
-  if (tone.isShort) {
+  if (tone.isShort && !tone.isEmpathetic) {
     next.resistance += 3;
     next.frustration += 2;
     next.cognitiveLoad += 2;
   }
 
-  if (contentNegative.isDismissive || tone.isAggressive) {
-    next.ruptureLevel += 20;
-    next.trust -= 10;
-    next.psychologicalSafety -= 15;
-    next.perceivedRespect -= 15;
-    next.frustration += 10;
-    next.resistance += 5;
+  if (relationshipNegative) {
+    next.ruptureLevel += tone.isHostile ? 28 : 22;
+    next.trust -= tone.isHostile ? 18 : 14;
+    next.psychologicalSafety -= tone.isHostile ? 22 : 18;
+    next.perceivedRespect -= tone.isHostile ? 22 : 18;
+    next.frustration += 12;
+    next.resistance += 8;
+    next.goalProgress -= 12;
   }
 
-  if (tone.isHostile) {
-    next.ruptureLevel += 25;
-    next.trust -= 15;
-    next.psychologicalSafety -= 20;
-    next.perceivedRespect -= 20;
-    next.frustration += 15;
-    next.goalProgress -= 15;
-  }
-
-  if (tone.isEmpathetic) {
+  if (tone.isEmpathetic && !relationshipNegative) {
     next.ruptureLevel -= Math.round(15 * repairFactor);
     next.trust += Math.round(8 * repairFactor);
     next.psychologicalSafety += Math.round(10 * repairFactor);
@@ -201,8 +247,10 @@ function applyToneAndRuptureEffects(
     next.frustration -= Math.round(5 * repairFactor);
   }
 
-  const ruptureDecay = peakRupture >= 70 ? 0 : peakRupture >= 50 ? 1 : 2;
-  next.ruptureLevel -= ruptureDecay;
+  if (!relationshipNegative) {
+    const ruptureDecay = peakRupture >= 70 ? 0 : peakRupture >= 50 ? 1 : 2;
+    next.ruptureLevel -= ruptureDecay;
+  }
 
   return next;
 }
@@ -217,13 +265,18 @@ export function applyStateFromAnalysis(
   }
 
   let next = { ...state };
+  next.operationalCompleteness = mergeOperationalCompletenessFromAnalysis(
+    next.operationalCompleteness,
+    analysis
+  );
   next = applyArgumentFatigueEffects(next, analysis, message);
   next = applyContentQualityEffects(next, analysis);
   next = applyGoalProgressEffects(next, analysis);
   next = applyToneAndRuptureEffects(next, analysis);
+  next = applyNegativeBehaviorStreak(next, analysis);
   next = applyBehavioralMemory(next, analysis);
   next = clampState(next);
-  next.readinessScore = calculateReadinessScore(next);
+  next.readinessScore = calculateExecutiveReadinessScore(next);
   next.conversationStatus = transitionConversationStatus(next);
 
   return next;

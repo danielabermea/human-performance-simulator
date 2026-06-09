@@ -11,7 +11,7 @@ import {
 import { updateConversationMetrics } from "../feedback/metricsUpdater";
 import { generateFeedbackReport, FeedbackReport } from "../feedback/feedbackGenerator";
 import { isSimulationTerminated } from "./conversationOutcome";
-import { analyzeMessage } from "./signals";
+import { isRelationshipNegativeAnalysis, analyzeMessage } from "./signals";
 import { applyStateFromAnalysis } from "./state";
 import { Scenario, ScenarioState } from "./types";
 
@@ -20,6 +20,7 @@ export type ProcessMessageResult = {
   metrics: ConversationMetrics;
   executiveScores: ExecutiveScores;
   feedback: FeedbackReport | null;
+  lastTurnDisrespectful: boolean;
 };
 
 export function processUserMessage(
@@ -35,12 +36,14 @@ export function processUserMessage(
       state,
       metrics,
       executiveScores,
+      lastTurnDisrespectful: false,
       feedback: generateFeedbackReport(
         scenario,
         state,
         metrics,
         executiveScores,
-        transcript
+        transcript,
+        scenario.initialState
       ),
     };
   }
@@ -48,22 +51,26 @@ export function processUserMessage(
   const previousState = state;
   const analysis = analyzeMessage(message, scenario.hiddenMotivation);
   const nextState = applyStateFromAnalysis(state, analysis, message);
+
+  const userTurnIndex = transcript.filter((t) => t.role === "user").length;
+  const previousUserMessage = transcript
+    .filter((t) => t.role === "user")
+    .at(-1)?.content;
+
   const nextMetrics = updateConversationMetrics(
     metrics,
     analysis,
     message,
     previousState,
-    nextState
+    nextState,
+    userTurnIndex,
+    previousUserMessage
   );
-  const nextExecutiveScores = updateExecutiveScores(
-    executiveScores,
-    message,
-    {
-      trust: previousState.trust,
-      resistance: previousState.resistance,
-      ruptureLevel: previousState.ruptureLevel,
-    }
-  );
+
+  const latestSignals = nextMetrics.behaviorTurns.at(-1);
+  const nextExecutiveScores = latestSignals
+    ? updateExecutiveScores(executiveScores, latestSignals)
+    : executiveScores;
 
   const feedback = isSimulationTerminated(nextState)
     ? generateFeedbackReport(
@@ -71,7 +78,8 @@ export function processUserMessage(
         nextState,
         nextMetrics,
         nextExecutiveScores,
-        transcript
+        transcript,
+        scenario.initialState
       )
     : null;
 
@@ -79,6 +87,7 @@ export function processUserMessage(
     state: nextState,
     metrics: nextMetrics,
     executiveScores: nextExecutiveScores,
+    lastTurnDisrespectful: isRelationshipNegativeAnalysis(analysis),
     feedback,
   };
 }

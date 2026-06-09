@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Influence Simulator",
+  title: "Human Amplified Simulator",
   description:
-    "Practice workplace influence conversations with a resistant stakeholder",
+    "Practice real-world stakeholder conversations with AI simulation. Build emotional intelligence, adaptability, and alignment skills.",
 };
 
 export default function RootLayout({

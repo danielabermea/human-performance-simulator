@@ -11,6 +11,7 @@ function clampTrajectory(trajectory: RelationshipTrajectory): RelationshipTrajec
     opennessPenalty: clamp(trajectory.opennessPenalty, 0, 55),
     peakRupture: clamp(trajectory.peakRupture, 0, 100),
     escalationMemoryTurns: clamp(trajectory.escalationMemoryTurns, 0, 2),
+    negativeBehaviorStreak: clamp(trajectory.negativeBehaviorStreak, 0, 6),
   };
 }
 
@@ -86,7 +87,9 @@ function applyEscalationMemoryTrigger(
   const next = { ...state, relationshipTrajectory: { ...state.relationshipTrajectory } };
 
   const triggered =
-    analysis.tone.hasEscalationLanguage && next.ruptureLevel > 50;
+    (analysis.tone.hasEscalationLanguage && next.ruptureLevel > 50) ||
+    (analysis.tone.isHostile && next.ruptureLevel > 35) ||
+    (analysis.tone.isBlameLanguage && next.ruptureLevel > 30);
 
   if (!triggered) return next;
 
@@ -137,14 +140,14 @@ export function buildBehavioralMemoryPrompt(state: ScenarioState): string {
     state.relationshipTrajectory;
 
   const lines: string[] = [
-    "BEHAVIORAL MEMORY (CRITICAL — you do NOT reset emotionally between messages):",
+    "BEHAVIORAL MEMORY (CRITICAL - you do NOT reset emotionally between messages):",
     "Your relationship trajectory persists. Past rupture permanently shapes how you interpret this conversation.",
   ];
 
   if (peakRupture >= 50 || skepticismBaseline >= 20) {
     lines.push(
       "- High rupture history: skepticism is now your DEFAULT stance, not a reaction",
-      "- Even neutral statements may feel like pressure — interpret them cautiously",
+      "- Even neutral statements may feel like pressure - interpret them cautiously",
       "- You are less willing to accept proposals, trust numeric claims, or engage in collaborative planning",
       "- Confidence claims ('I promise', 'just trust me', 'I'm confident') are treated as unreliable"
     );
@@ -152,20 +155,30 @@ export function buildBehavioralMemoryPrompt(state: ScenarioState): string {
 
   if (skepticismBaseline >= 30) {
     lines.push(
-      `- Skepticism baseline is elevated (${skepticismBaseline}/65) — demand proof before moving forward`
+      `- Skepticism baseline is elevated (${skepticismBaseline}/65) - demand proof before moving forward`
     );
   }
 
   if (opennessPenalty >= 25) {
     lines.push(
-      `- Openness penalty is active (${opennessPenalty}/55) — resist joint planning until trust is rebuilt`
+      `- Openness penalty is active (${opennessPenalty}/55) - resist joint planning until trust is rebuilt`
     );
   }
 
   if (escalationMemoryTurns > 0) {
     lines.push(
       `- ESCALATION MEMORY ACTIVE (${escalationMemoryTurns} turn(s) remaining): sharply reduced openness after pressure language`,
-      "- Do not soften quickly — the consultant must earn back credibility"
+      "- Do not soften quickly - the consultant must earn back credibility",
+      "- Do NOT ask helpful coaching questions — challenge the communication pattern if it continues"
+    );
+  }
+
+  if (state.relationshipTrajectory.negativeBehaviorStreak >= 1) {
+    lines.push(
+      `- RECENT DISRESPECT (${state.relationshipTrajectory.negativeBehaviorStreak} turn(s)): trust and respect are eroding`,
+      "- Stop providing helpful coaching questions designed to move the proposal forward",
+      "- Set boundaries, challenge the behavior, or express that the conversation is becoming difficult to engage with",
+      '- Example lines: "I don\'t think we\'re having a productive conversation." / "If we\'re going to continue, we need to reset how we\'re approaching this."'
     );
   }
 
@@ -186,30 +199,42 @@ export function buildBehavioralMemoryPrompt(state: ScenarioState): string {
 
 export function buildDecisionShiftPrompt(state: ScenarioState): string {
   if (isExecutionMode(state)) {
-    return `DECISION MODE — EXECUTION PLANNING (conditionally open, trust stable):
-- Collaborate on how to implement safely — not whether the idea has merit
+    return `DECISION MODE - EXECUTION PLANNING (conditionally open, trust stable):
+- Collaborate on how to implement safely - not whether the idea has merit
 - Focus on phasing, staffing, metrics, rollback, and what gets deprioritized
 - Ask planning questions; avoid reopening fundamental skepticism unless new risk appears`;
+  }
+
+  if (state.conversationStatus === "conclusion") {
+    const highRisk =
+      state.ruptureLevel > 70 || state.trust < 50;
+    return `DECISION MODE - CLOSURE (relationship aligned):
+- Conditional support or positive conclusion language - no detail escalation
+- No additional skepticism probes unless high risk${
+      highRisk
+        ? " (ACTIVE: one focused concern allowed)"
+        : " (relationship is stable - close the conversation)"
+    }`;
   }
 
   const trust = state.trust;
 
   if (trust < 45) {
-    return `DECISION MODE — EVIDENCE FIRST (low trust):
-- Prioritize proof, data, and sources before evaluating the proposal
-- Challenge unsupported numbers and vague ROI claims
-- Do not discuss implementation details until credibility is established`;
+    return `DECISION MODE - TRUST BUILDING (low trust):
+- Prioritize whether the user understands your constraints before evaluating the proposal
+- Challenge unsupported claims - evaluate judgment and communication, not spreadsheets
+- Do not move toward alignment until they demonstrate empathy and perspective-taking`;
   }
 
   if (trust < 70) {
-    return `DECISION MODE — FEASIBILITY EVALUATION (medium trust):
-- Accept that some claims may be directionally valid — focus on operational feasibility
-- Evaluate staffing, timeline, risk, and disruption to current operations
-- Ask whether this can actually run alongside existing workload`;
+    return `DECISION MODE - EVALUATION (medium trust):
+- Accept that some claims may be directionally valid - focus on how the user reasons and relates
+- Evaluate whether they understand people impact, risk, and disruption to current workload
+- Ask whether they are genuinely considering your team's reality`;
   }
 
-  return `DECISION MODE — OPTIMIZATION (high trust):
+  return `DECISION MODE - OPTIMIZATION (high trust):
 - Engage collaboratively on how to make the initiative work
 - Focus on refining approach, phasing, and success criteria
-- Less interrogation of basic claims — more joint problem-solving`;
+- Less interrogation of basic claims - more joint problem-solving`;
 }

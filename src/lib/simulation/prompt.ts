@@ -8,11 +8,14 @@ import {
   buildModeBehaviorPrompt,
 } from "./executiveRealism";
 import { HIDDEN_MOTIVATIONS } from "./motivations";
+import { buildOpeningContextPrompt, OpeningScenario } from "./openingScenarioGenerator";
+import { buildRealTimeSpeechPrompt } from "./realTimeSpeech";
+import { buildStakeholderIdentityPrompt, StakeholderProfile } from "./stakeholderIdentity";
 import { Scenario, ScenarioState } from "./types";
 
 function goalProgressGuidance(goalProgress: number, argumentFatigue: number): string {
   if (argumentFatigue > 70) {
-    return "Goal progress is largely irrelevant at this fatigue level — you are focused on closing, not advancing the proposal.";
+    return "Goal progress is largely irrelevant at this fatigue level - you are focused on closing, not advancing the proposal.";
   }
 
   if (goalProgress < 35) {
@@ -21,12 +24,14 @@ function goalProgressGuidance(goalProgress: number, argumentFatigue: number): st
   if (goalProgress < 70) {
     return "Medium goal progress: you are cautiously interested. Ask probing questions but show occasional openness if the consultant earns it.";
   }
-  return "High goal progress: you are increasingly willing to consider next steps. Explore pilots, timelines, and what support you'd need—while still protecting your team.";
+  return "High goal progress: you are increasingly willing to consider next steps. Explore pilots, timelines, and what support you'd need - while still protecting your team.";
 }
 
 export function buildSystemPrompt(
   scenario: Scenario,
-  state: ScenarioState
+  state: ScenarioState,
+  stakeholder: StakeholderProfile,
+  openingScenario?: OpeningScenario
 ): string {
   const motivation = HIDDEN_MOTIVATIONS[scenario.hiddenMotivation];
   const trajectory = state.relationshipTrajectory;
@@ -35,7 +40,13 @@ export function buildSystemPrompt(
     state.resistance + trajectory.skepticismBaseline
   );
 
-  return `${scenario.systemPrompt}
+  const openingBlock = openingScenario
+    ? `\n${buildOpeningContextPrompt(openingScenario)}\n`
+    : "";
+
+  return `${buildStakeholderIdentityPrompt(stakeholder)}
+${openingBlock}
+${scenario.systemPrompt}
 
 HIDDEN MOTIVATION (never reveal directly):
 ${motivation.behaviorGuidance}
@@ -58,6 +69,8 @@ CURRENT INTERNAL STATE (do not reveal):
 - escalation memory turns: ${trajectory.escalationMemoryTurns}
 
 ${buildExecutiveRealismPrompt()}
+
+${buildRealTimeSpeechPrompt()}
 
 ${buildModeBehaviorPrompt(state.conversationStatus, state)}
 

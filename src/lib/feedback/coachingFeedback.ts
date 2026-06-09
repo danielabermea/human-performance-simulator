@@ -1,8 +1,20 @@
-export type ConversationOutcome =
-  | "won"
-  | "lost"
-  | "conditionallyAccepted"
-  | "ended";
+import { CompetencyScores } from "./hacfCompetencies";
+import { TurnBehaviorSignals } from "./behaviorSignals";
+
+export type SessionSummary =
+  | "strongAlignment"
+  | "buildingTrust"
+  | "cautiousEngagement"
+  | "relationshipStrained"
+  | "sessionComplete";
+
+export type OperationalCompletenessSnapshot = {
+  ownerDefined: boolean;
+  pilotScopeDefined: boolean;
+  rollbackExists: boolean;
+  kpiSetDefined: boolean;
+  timelineDirectionallyDefined: boolean;
+};
 
 export type MessageTurn = {
   role: "user" | "assistant";
@@ -11,216 +23,195 @@ export type MessageTurn = {
 };
 
 export type FeedbackInput = {
-  outcome: ConversationOutcome;
-  executiveScores: {
-    emotionalIntelligence: number;
-    stakeholderManagement: number;
-    executiveCommunication: number;
-    adaptiveCommunication: number;
-    influenceAndPersuasion: number;
-  };
+  sessionSummary: SessionSummary;
+  competencies: CompetencyScores;
   finalState: {
     trust: number;
     resistance: number;
     frustration: number;
     ruptureLevel: number;
     readinessScore?: number;
+    psychologicalSafety?: number;
+    perceivedRespect?: number;
+    conversationStatus?: string;
+    closureReason?: "commitment" | "decline" | "wrapUp";
   };
   transcript: MessageTurn[];
+  behaviorTurns?: TurnBehaviorSignals[];
 };
 
 export type CoachingFeedback = {
-  outcomeLabel: string;
-  relationshipQuality: "Weak" | "Moderate" | "Strong" | "High";
-  influenceLevel: "Low" | "Medium" | "High";
-  confidenceLevel: "Low" | "Medium" | "High";
-  competencies: {
-    emotionalIntelligence: number;
-    stakeholderManagement: number;
-    executiveCommunication: number;
-    adaptiveCommunication: number;
-    influenceAndPersuasion: number;
-  };
   strengths: string[];
   developmentAreas: string[];
-  scenarioInsights: string[];
-  keyMoments: {
-    turnIndex: number;
-    event: string;
-    impact: string;
-  }[];
 };
 
-export function generateCoachingFeedback(
-  input: FeedbackInput
-): CoachingFeedback {
-  const { outcome, executiveScores, finalState, transcript } = input;
+function summaryFromRelationshipState(state: {
+  readinessScore: number;
+  trust: number;
+  ruptureLevel: number;
+  resistance: number;
+}): SessionSummary {
+  if (state.trust >= 70 && state.ruptureLevel <= 40 && state.resistance <= 55) {
+    return "strongAlignment";
+  }
+  if (state.readinessScore >= 55 && state.trust >= 50) {
+    return "buildingTrust";
+  }
+  if (state.ruptureLevel > 60 || state.trust < 40) {
+    return "relationshipStrained";
+  }
+  if (state.readinessScore >= 45) {
+    return "cautiousEngagement";
+  }
+  return "sessionComplete";
+}
 
-  const avgScore =
-    Object.values(executiveScores).reduce((a, b) => a + b, 0) / 5;
+export function mapStateToSessionSummary(state: {
+  conversationStatus: string;
+  readinessScore: number;
+  trust: number;
+  ruptureLevel: number;
+  resistance: number;
+  closureReason?: "commitment" | "decline" | "wrapUp";
+}): SessionSummary {
+  if (state.conversationStatus === "concluded") {
+    if (state.closureReason === "decline") {
+      return state.trust >= 45 ? "cautiousEngagement" : "relationshipStrained";
+    }
 
-  const relationshipQuality: CoachingFeedback["relationshipQuality"] =
-    avgScore > 75
-      ? "High"
-      : avgScore > 60
-        ? "Strong"
-        : avgScore > 45
-          ? "Moderate"
-          : "Weak";
+    if (state.closureReason === "wrapUp") {
+      return summaryFromRelationshipState(state);
+    }
 
-  const influenceLevel: CoachingFeedback["influenceLevel"] =
-    finalState.trust > 70 ? "High" : finalState.trust > 50 ? "Medium" : "Low";
+    return summaryFromRelationshipState(state);
+  }
 
-  const confidenceLevel: CoachingFeedback["confidenceLevel"] =
-    finalState.ruptureLevel < 40
-      ? "High"
-      : finalState.ruptureLevel < 70
-        ? "Medium"
-        : "Low";
+  if (state.conversationStatus === "lost") {
+    return "relationshipStrained";
+  }
+
+  if (
+    state.conversationStatus === "conditionallyAccepted" ||
+    state.conversationStatus === "conclusion"
+  ) {
+    return "strongAlignment";
+  }
+
+  if (state.conversationStatus === "conditionallyAcceptedWin") {
+    return "buildingTrust";
+  }
+
+  if (state.conversationStatus === "userEnded") {
+    return summaryFromRelationshipState(state);
+  }
+
+  return "sessionComplete";
+}
+
+export function generateCoachingFeedback(input: FeedbackInput): CoachingFeedback {
+  const { sessionSummary, competencies, finalState, behaviorTurns } = input;
+  const c = competencies;
 
   const strengths: string[] = [];
 
-  if (executiveScores.stakeholderManagement > 70) {
+  if (c.emotionalIntelligence > 70) {
     strengths.push(
-      "Connected proposal to stakeholder operational constraints effectively."
+      "Stayed composed and non-defensive when challenged, keeping the conversation workable under pressure."
     );
   }
 
-  if (executiveScores.emotionalIntelligence > 70) {
+  if (c.relationshipIntelligence > 70) {
     strengths.push(
-      "Demonstrated strong emotional awareness and responsiveness to resistance."
+      "Demonstrated perspective-taking and listening, helping the stakeholder feel heard rather than managed."
     );
   }
 
-  if (executiveScores.executiveCommunication > 70) {
+  if (c.criticalThinkingDiscernment > 70) {
     strengths.push(
-      "Used specific, operationally grounded language in discussions."
+      "Reasoned thoughtfully under uncertainty, weighing trade-offs instead of asserting unsupported claims."
     );
   }
 
-  if (finalState.trust > 65) {
+  if (c.adaptabilityLearningAgility > 70) {
     strengths.push(
-      "Successfully built trust through structured engagement."
+      "Adjusted communication in response to pushback, showing willingness to revise approach in real time."
+    );
+  }
+
+  if (c.humanCenteredDecisionMaking > 70) {
+    strengths.push(
+      "Balanced people and performance, considering stakeholder impact, fairness, and shared ownership."
+    );
+  }
+
+  if (
+    finalState.trust >= 65 &&
+    finalState.ruptureLevel <= 45 &&
+    finalState.resistance <= 55
+  ) {
+    strengths.push(
+      "Your approach helped shift the conversation toward alignment through relationship-building, not jargon or volume of detail."
+    );
+  }
+
+  if (behaviorTurns?.some((t) => t.reframedAfterPushback)) {
+    strengths.push(
+      "Adapted framing after resistance rather than repeating the same argument."
+    );
+  }
+
+  if (behaviorTurns?.some((t) => t.perspectiveEngagement)) {
+    strengths.push(
+      "Invited the stakeholder's perspective before advancing your proposal."
     );
   }
 
   const developmentAreas: string[] = [];
 
-  if (executiveScores.executiveCommunication < 60) {
+  if (c.emotionalIntelligence < 60) {
     developmentAreas.push(
-      "Remained too high-level when stakeholder required operational specificity."
+      "Practice emotional regulation when challenged: notice defensive reactions and pause before responding."
     );
   }
 
-  if (executiveScores.influenceAndPersuasion < 60) {
+  if (c.relationshipIntelligence < 60) {
     developmentAreas.push(
-      "Relied on assertion rather than evidence-based persuasion."
+      "Strengthen perspective-taking: reflect stakeholder concerns before advancing your position."
     );
   }
 
-  if (executiveScores.emotionalIntelligence < 60) {
+  if (c.criticalThinkingDiscernment < 60) {
     developmentAreas.push(
-      "Used language that escalated tension rather than stabilizing trust."
+      "Slow down to evaluate assumptions: distinguish facts from opinions and address unintended consequences."
     );
   }
 
-  if (finalState.ruptureLevel > 60) {
+  if (c.adaptabilityLearningAgility < 60) {
     developmentAreas.push(
-      "Failed to repair relationship effectively under pressure."
+      "When resistance rises, simplify and adjust rather than repeating your case."
     );
   }
 
-  const scenarioInsights: string[] = [];
-
-  if (finalState.trust > 60 && finalState.resistance < 50) {
-    scenarioInsights.push(
-      "Key breakthrough occurred when operational constraints were acknowledged explicitly."
+  if (c.humanCenteredDecisionMaking < 60) {
+    developmentAreas.push(
+      "Center people in your reasoning: consider team impact, fairness, and long-term consequences."
     );
   }
 
-  if (finalState.ruptureLevel > 50) {
-    scenarioInsights.push(
-      "Escalation points were driven by lack of specificity and perceived dismissal of concerns."
+  if (finalState.ruptureLevel > 55) {
+    developmentAreas.push(
+      "Prioritize relationship repair when tension rises: empathy and acknowledgment before re-proposing."
     );
   }
 
-  if (finalState.readinessScore && finalState.readinessScore > 65) {
-    scenarioInsights.push(
-      "Conversation shifted into execution mode when proposal became operationally concrete."
+  if (sessionSummary === "relationshipStrained") {
+    developmentAreas.push(
+      "Lead with empathy and repair when alignment breaks down; re-establish safety before pushing the proposal."
     );
   }
-
-  const keyMoments: CoachingFeedback["keyMoments"] = [];
-
-  transcript.forEach((t, i) => {
-    if (t.role !== "user") return;
-
-    const text = t.content.toLowerCase();
-
-    if (text.includes("just do it") || text.includes("you're dumb")) {
-      keyMoments.push({
-        turnIndex: i,
-        event: "Escalation trigger",
-        impact: "Increased rupture and reduced stakeholder trust",
-      });
-    }
-
-    if (text.includes("pilot") || text.includes("fte")) {
-      keyMoments.push({
-        turnIndex: i,
-        event: "Operational specificity introduced",
-        impact: "Improved stakeholder engagement and reduced resistance",
-      });
-    }
-
-    if (text.includes("i understand") || text.includes("that makes sense")) {
-      keyMoments.push({
-        turnIndex: i,
-        event: "Repair signal",
-        impact: "Reduced rupture and improved trust trajectory",
-      });
-    }
-  });
 
   return {
-    outcomeLabel: outcome,
-    relationshipQuality,
-    influenceLevel,
-    confidenceLevel,
-    competencies: executiveScores,
-    strengths,
-    developmentAreas,
-    scenarioInsights,
-    keyMoments,
+    strengths: strengths.slice(0, 5),
+    developmentAreas: developmentAreas.slice(0, 4),
   };
-}
-
-export function formatOutcomeLabel(outcome: ConversationOutcome): string {
-  switch (outcome) {
-    case "won":
-      return "Won";
-    case "lost":
-      return "Lost";
-    case "conditionallyAccepted":
-      return "Conditionally Accepted";
-    case "ended":
-      return "Session Ended";
-  }
-}
-
-export function mapStateToConversationOutcome(state: {
-  conversationStatus: string;
-  readinessScore: number;
-  trust: number;
-}): ConversationOutcome {
-  if (state.conversationStatus === "lost") return "lost";
-  if (state.conversationStatus === "conditionallyAccepted") {
-    return state.trust >= 70 && state.readinessScore >= 80
-      ? "won"
-      : "conditionallyAccepted";
-  }
-  if (state.conversationStatus === "userEnded") {
-    return state.readinessScore >= 65 ? "conditionallyAccepted" : "ended";
-  }
-  return "ended";
 }

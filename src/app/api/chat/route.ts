@@ -6,17 +6,22 @@ import {
   processUserMessage,
 } from "@/lib/scenarios";
 import {
-  ENDED_CONVERSATION_MESSAGE,
-  isSimulationTerminated,
-  markUserEnded,
-  USER_ENDED_MESSAGE,
-} from "@/lib/simulation/conversationOutcome";
-import {
+  getSessionStakeholderDisplay,
   getSimulationSession,
   pruneSessions,
   resetSimulationSession,
   SimulationSession,
 } from "@/lib/simulation/sessionStore";
+import {
+  evaluateManualOrStickyTermination,
+  evaluatePostAssistantTerminationGate,
+  evaluatePostMessageLossGate,
+  evaluatePreMessageDisengagementGate,
+  evaluatePreMessageLossGate,
+  evaluatePreMessageTerminationGate,
+  TerminationGateResult,
+} from "@/lib/simulation/terminationGate";
+import { pickRelationshipBreakdownMessage } from "@/lib/simulation/conversationOutcome";
 import { ChatMessage } from "@/lib/prompts";
 
 const client = new OpenAI({
@@ -41,9 +46,34 @@ function buildFeedback(
       session.state,
       session.metrics,
       session.executiveScores,
-      session.transcript
+      session.transcript,
+      session.initialState,
+      {
+        stakeholder: session.stakeholder,
+        openingScenario: session.openingScenario,
+      }
     )
   );
+}
+
+function terminationResponse(
+  session: SimulationSession,
+  gate: TerminationGateResult,
+  message: string
+) {
+  session.state = gate.state;
+  const feedback = buildFeedback(session, null);
+
+  return Response.json({
+    ...(message ? { message } : {}),
+    state: session.state,
+    feedback,
+    stakeholder: getSessionStakeholderDisplay(session),
+    conversationEnded: true,
+    closureDetected: gate.closureDetected,
+    endType: gate.endType,
+    closureReason: gate.closureReason ?? null,
+  });
 }
 
 export async function POST(req: Request) {
@@ -65,62 +95,128 @@ export async function POST(req: Request) {
 
   pruneSessions(sessionId);
 
-  if (endSimulation) {
-    session.state = markUserEnded(session.state);
-    const feedback = buildFeedback(session, null);
-
-    return Response.json({
-      message: USER_ENDED_MESSAGE,
-      state: session.state,
-      feedback,
-      conversationEnded: true,
-    });
-  }
-
   const chatMessages = messages ?? [];
-  const lastMessage = chatMessages[chatMessages.length - 1]?.content ?? "";
+  const lastUserMessage =
+    chatMessages.filter((m) => m.role === "user").at(-1)?.content ?? "";
+  const lastAssistantMessage =
+    chatMessages.filter((m) => m.role === "assistant").at(-1)?.content;
 
   syncTranscript(session, chatMessages);
 
-  if (isSimulationTerminated(session.state)) {
-    const feedback = buildFeedback(session, null);
-    return Response.json({
-      message:
-        session.state.conversationStatus === "userEnded"
-          ? USER_ENDED_MESSAGE
-          : ENDED_CONVERSATION_MESSAGE,
-      state: session.state,
-      feedback,
-      conversationEnded: true,
-    });
+  // ── TERMINATION GATE (HIGHEST PRIORITY) ──────────────────────────────
+  // Step 0: Manual end or already-terminated session - hard stop, no pipeline
+  const manualOrSticky = evaluateManualOrStickyTermination(
+    session.state,
+    Boolean(endSimulation)
+  );
+  if (manualOrSticky) {
+    return terminationResponse(session, manualOrSticky, manualOrSticky.endMessage);
   }
 
+  // Step 1b: Stakeholder already disengaged — no further turns
+  const preDisengagement = evaluatePreMessageDisengagementGate(
+    session.state,
+    lastAssistantMessage
+  );
+  if (preDisengagement) {
+    return terminationResponse(session, preDisengagement, preDisengagement.endMessage);
+  }
+
+  // Step 1: Closure detection BEFORE state updates, scoring, or AI
+  const preClosure = evaluatePreMessageTerminationGate({
+    state: session.state,
+    userMessage: lastUserMessage,
+    lastAssistantMessage,
+  });
+  if (preClosure) {
+    return terminationResponse(session, preClosure, preClosure.endMessage);
+  }
+
+  // Step 2: Loss on current state BEFORE processing new message
+  const preLoss = evaluatePreMessageLossGate(session.state);
+  if (preLoss) {
+    return terminationResponse(session, preLoss, preLoss.endMessage);
+  }
+
+  // ── PIPELINE (only runs if gate did not fire) ────────────────────────
   const result = processUserMessage(
     ops_resistant_leader,
     session.state,
     session.metrics,
     session.executiveScores,
     session.transcript,
-    lastMessage
+    lastUserMessage
   );
 
   session.state = result.state;
   session.metrics = result.metrics;
   session.executiveScores = result.executiveScores;
 
-  const conversationEnded = isSimulationTerminated(session.state);
-  const feedback = conversationEnded ? buildFeedback(session, result.feedback) : null;
+  // Step 3: Loss AFTER state update - generate stakeholder breakdown line, then terminate
+  const postLoss = evaluatePostMessageLossGate(session.state);
+  if (postLoss) {
+    session.state = postLoss.state;
 
+    let breakdownMessage = pickRelationshipBreakdownMessage(session.state);
+
+    try {
+      const completion = await client.chat.completions.create({
+        model: "gpt-4.1-mini",
+        messages: [
+          {
+            role: "system",
+            content: buildSystemPrompt(
+              ops_resistant_leader,
+              session.state,
+              session.stakeholder,
+              session.openingScenario
+            ),
+          },
+          ...chatMessages,
+        ],
+        max_tokens: 120,
+      });
+
+      const generated = completion.choices[0].message.content?.trim();
+      if (generated) {
+        breakdownMessage = generated;
+      }
+    } catch {
+      // Fall back to deterministic breakdown message
+    }
+
+    session.transcript.push({ role: "assistant", content: breakdownMessage });
+    const feedback = buildFeedback(session, result.feedback);
+
+    return Response.json({
+      message: breakdownMessage,
+      state: session.state,
+      feedback,
+      stakeholder: getSessionStakeholderDisplay(session),
+      conversationEnded: true,
+      closureDetected: false,
+      endType: "lost",
+      closureReason: null,
+      lastTurnDisrespectful: result.lastTurnDisrespectful,
+    });
+  }
+
+  // Step 4: AI response (only if gate passed and no loss)
   const completion = await client.chat.completions.create({
     model: "gpt-4.1-mini",
     messages: [
       {
         role: "system",
-        content: buildSystemPrompt(ops_resistant_leader, session.state),
+        content: buildSystemPrompt(
+          ops_resistant_leader,
+          session.state,
+          session.stakeholder,
+          session.openingScenario
+        ),
       },
       ...chatMessages,
     ],
-    max_tokens: session.state.conversationStatus === "lost" ? 120 : 600,
+    max_tokens: 180,
   });
 
   const assistantContent = completion.choices[0].message.content ?? "";
@@ -128,10 +224,25 @@ export async function POST(req: Request) {
     session.transcript.push({ role: "assistant", content: assistantContent });
   }
 
+  // Step 5: Stakeholder closure after AI - hard stop, no further turns
+  const postAssistant = evaluatePostAssistantTerminationGate(
+    session.state,
+    assistantContent,
+    lastUserMessage
+  );
+  if (postAssistant) {
+    return terminationResponse(session, postAssistant, postAssistant.endMessage);
+  }
+
   return Response.json({
     message: assistantContent,
     state: session.state,
-    feedback,
-    conversationEnded,
+    feedback: null,
+    stakeholder: getSessionStakeholderDisplay(session),
+    conversationEnded: false,
+    closureDetected: false,
+    endType: null,
+    closureReason: null,
+    lastTurnDisrespectful: result.lastTurnDisrespectful,
   });
 }

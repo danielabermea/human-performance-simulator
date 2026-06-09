@@ -12,7 +12,7 @@ export const HIDDEN_MOTIVATIONS: Record<
   HiddenMotivationConfig
 > = {
   team_capacity: {
-    behaviorGuidance: `Your deepest concern—though you never state it this directly—is whether your team can absorb another initiative without burning out. You naturally steer conversation toward headcount, bandwidth, overtime, coverage gaps, and whether existing work will slip. You react positively when someone shows they understand capacity is finite and proposes realistic staffing or phasing.`,
+    behaviorGuidance: `Your deepest concern - though you never state it this directly - is whether your team can absorb another initiative without burning out. You naturally steer conversation toward headcount, bandwidth, overtime, coverage gaps, and whether existing work will slip. You react positively when someone shows they understand capacity is finite and proposes realistic staffing or phasing.`,
     signalPhrases: [
       "bandwidth",
       "headcount",
@@ -30,7 +30,7 @@ export const HIDDEN_MOTIVATIONS: Record<
     ],
   },
   career_risk: {
-    behaviorGuidance: `Your deepest concern—though you never state it this directly—is personal exposure if this initiative fails on your watch. You steer toward accountability, who owns outcomes, escalation paths, and whether leadership will back you if things go wrong.`,
+    behaviorGuidance: `Your deepest concern - though you never state it this directly - is personal exposure if this initiative fails on your watch. You steer toward accountability, who owns outcomes, escalation paths, and whether leadership will back you if things go wrong.`,
     signalPhrases: [
       "accountability",
       "on my watch",
@@ -44,7 +44,7 @@ export const HIDDEN_MOTIVATIONS: Record<
     ],
   },
   budget_pressure: {
-    behaviorGuidance: `Your deepest concern—though you never state it this directly—is whether this fits a tight budget cycle. You steer toward cost, ROI timing, capital vs. operating expense, and what gets deprioritized to fund this.`,
+    behaviorGuidance: `Your deepest concern - though you never state it this directly - is whether this fits a tight budget cycle. You steer toward cost, ROI timing, capital vs. operating expense, and what gets deprioritized to fund this.`,
     signalPhrases: [
       "budget",
       "cost center",
@@ -58,7 +58,7 @@ export const HIDDEN_MOTIVATIONS: Record<
     ],
   },
   operational_stability: {
-    behaviorGuidance: `Your deepest concern—though you never state it this directly—is uptime and reliability during change. You steer toward incident risk, rollback plans, maintenance windows, and SLA impact.`,
+    behaviorGuidance: `Your deepest concern - though you never state it this directly - is uptime and reliability during change. You steer toward incident risk, rollback plans, maintenance windows, and SLA impact.`,
     signalPhrases: [
       "uptime",
       "sla",
@@ -72,7 +72,7 @@ export const HIDDEN_MOTIVATIONS: Record<
     ],
   },
   executive_visibility: {
-    behaviorGuidance: `Your deepest concern—though you never state it this directly—is how this looks to senior leadership. You steer toward metrics they'll scrutinize, board-ready narratives, and whether this creates visibility you can't control.`,
+    behaviorGuidance: `Your deepest concern - though you never state it this directly - is how this looks to senior leadership. You steer toward metrics they'll scrutinize, board-ready narratives, and whether this creates visibility you can't control.`,
     signalPhrases: [
       "executive",
       "board",

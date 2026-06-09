@@ -2,6 +2,7 @@ import { addressesHiddenMotivation } from "./motivations";
 import {
   HiddenMotivationType,
   MessageAnalysis,
+  ToneSignals,
 } from "./types";
 
 function includesAny(text: string, phrases: string[]): boolean {
@@ -10,6 +11,21 @@ function includesAny(text: string, phrases: string[]): boolean {
 
 function hasPattern(text: string, pattern: RegExp): boolean {
   return pattern.test(text);
+}
+
+export function isRelationshipNegative(tone: ToneSignals): boolean {
+  return (
+    tone.isHostile ||
+    tone.isAggressive ||
+    tone.isDismissive ||
+    tone.isBlameLanguage ||
+    tone.isPressureTactic ||
+    tone.isPersonalAttack
+  );
+}
+
+export function isRelationshipNegativeAnalysis(analysis: MessageAnalysis): boolean {
+  return isRelationshipNegative(analysis.tone);
 }
 
 export function analyzeMessage(
@@ -177,6 +193,16 @@ export function analyzeMessage(
     "overcomplicating",
     "over-complicating",
     "making this harder",
+    "just get on board",
+    "get on board",
+    "stop getting in the way",
+    "stop blocking",
+    "stop pushing back",
+    "stop resisting",
+    "not my problem",
+    "deal with it",
+    "move on",
+    "get over it",
   ]);
 
   const hasUnsupportedAssertions = includesAny(text, [
@@ -207,8 +233,14 @@ export function analyzeMessage(
     "appreciate",
     "hear you",
     "i see your concern",
+    "i can see why",
     "valid point",
+    "fair concern",
     "that makes sense",
+    "makes sense that",
+    "i recognize",
+    "you're right to",
+    "you are right to",
   ]);
 
   const isAggressive = includesAny(text, [
@@ -217,6 +249,12 @@ export function analyzeMessage(
     "you must",
     "you're wrong",
     "you are wrong",
+    "you're being difficult",
+    "you are being difficult",
+    "stop making excuses",
+    "stop whining",
+    "that's on you",
+    "that's your fault",
   ]);
 
   const isHostile = includesAny(text, [
@@ -226,6 +264,50 @@ export function analyzeMessage(
     "incompetent",
     "waste of time",
     "shut up",
+    "pathetic",
+    "ridiculous",
+    "absurd",
+    "don't be stupid",
+    "you're useless",
+    "you are useless",
+  ]);
+
+  const isBlameLanguage = includesAny(text, [
+    "you're the problem",
+    "you are the problem",
+    "your problem",
+    "you caused",
+    "you created this",
+    "because of you",
+    "your fault",
+    "blame you",
+    "you're why",
+    "you are why",
+  ]);
+
+  const isPressureTactic = includesAny(text, [
+    "non-negotiable",
+    "no choice",
+    "mandate",
+    "figure it out",
+    "just trust leadership",
+    "leadership decided",
+    "already decided",
+    "no debate",
+    "stop delaying",
+    "stop stalling",
+  ]);
+
+  const isPersonalAttack = includesAny(text, [
+    "you don't care",
+    "you dont care",
+    "you never listen",
+    "you're not listening",
+    "you are not listening",
+    "you're unreasonable",
+    "you are unreasonable",
+    "you're obstructing",
+    "you are obstructing",
   ]);
 
   const hasEscalationLanguage = includesAny(text, [
@@ -276,6 +358,59 @@ export function analyzeMessage(
       "actually,",
     ]);
 
+  const showsCriticalThinking = includesAny(text, [
+    "assumption",
+    "depends on",
+    "have we considered",
+    "what if",
+    "unintended",
+    "weighing",
+    "based on what we know",
+    "evidence suggests",
+    "fact vs",
+    "on the other hand",
+  ]);
+
+  const showsAdaptability = includesAny(text, [
+    "fair point",
+    "you're right",
+    "you are right",
+    "let me reconsider",
+    "i hadn't considered",
+    "good challenge",
+    "revised",
+    "adjust",
+    "open to feedback",
+    "what would you suggest",
+  ]);
+
+  const showsHumanCenteredThinking = includesAny(text, [
+    "your team",
+    "people impact",
+    "burnout",
+    "right thing",
+    "long term",
+    "long-term",
+    "sustainable",
+    "shared ownership",
+    "together we",
+    "inclusion",
+    "belonging",
+    "accountable",
+    "transparent",
+  ]);
+
+  const showsSynthesis = includesAny(text, [
+    "on one hand",
+    "on the other hand",
+    "balance",
+    "both perspectives",
+    "weighing",
+    "trade-off",
+    "tradeoff",
+    "multiple factors",
+  ]);
+
   const specificityScore = [
     hasMetrics,
     hasPercentages,
@@ -320,11 +455,80 @@ export function analyzeMessage(
     "production",
   ]);
 
+  const ownerDefined =
+    includesAny(text, [
+      "who owns",
+      "owner",
+      "accountable",
+      "point person",
+      "will lead",
+      "led by",
+      "dri ",
+      "directly responsible",
+    ]) || hasStaffingEstimates;
+
+  const pilotScopeDefined =
+    includesAny(text, ["pilot", "proof of concept", "poc", "phased", "phase 1"]) &&
+    includesAny(text, [
+      "scope",
+      "limited rollout",
+      "small team",
+      "one team",
+      "bounded",
+      "narrow",
+      "subset",
+      "single site",
+      "one department",
+    ]);
+
+  const rollbackExists = hasRollbackPlan;
+
+  const kpiSetDefined =
+    hasSuccessMetrics ||
+    includesAny(text, [
+      "kpi",
+      "success metric",
+      "success criteria",
+      "how we'll measure",
+      "how we will measure",
+      "how we'll know",
+      "track progress",
+      "measure success",
+      "fewer incidents",
+      "reduce tickets",
+      "uptime target",
+      "high-level metric",
+      "directionally",
+    ]);
+
+  const timelineDirectionallyDefined =
+    hasTimelines ||
+    includesAny(text, [
+      "within ",
+      "over the next",
+      "by q1",
+      "by q2",
+      "by q3",
+      "by q4",
+      "first ",
+      "directionally",
+      "rough timeline",
+      "high level timeline",
+      "in the coming",
+    ]) ||
+    hasPattern(text, /\bin \d+ (weeks?|months?|quarters?)\b/);
+
   const addressesConcerns =
     answersObjections || acknowledgesConstraints || isEmpathetic;
 
   const providesEvidence =
-    hasMetrics || hasPercentages || hasRoiDiscussion || hasResourceEstimates;
+    ownerDefined ||
+    pilotScopeDefined ||
+    rollbackExists ||
+    kpiSetDefined ||
+    timelineDirectionallyDefined ||
+    hasImplementationPlan ||
+    acknowledgesConstraints;
 
   const discussesRoi = hasRoiDiscussion;
 
@@ -373,6 +577,10 @@ export function analyzeMessage(
       isEmpathetic,
       isAggressive,
       isHostile,
+      isDismissive,
+      isBlameLanguage,
+      isPressureTactic,
+      isPersonalAttack,
       isShort,
       hasEscalationLanguage,
       hasConfidenceClaim,
@@ -388,6 +596,11 @@ export function analyzeMessage(
       remainsVague: remainsVague || (negativeQualityCount > positiveQualityCount),
       repeatsUnsupportedClaims,
       isPrematureSolutioning,
+      ownerDefined,
+      pilotScopeDefined,
+      rollbackExists,
+      kpiSetDefined,
+      timelineDirectionallyDefined,
     },
     metrics: {
       hasValidation,
@@ -397,6 +610,10 @@ export function analyzeMessage(
       isInterruptionAttempt,
       specificityScore,
       evidenceScore,
+      showsCriticalThinking,
+      showsAdaptability,
+      showsHumanCenteredThinking,
+      showsSynthesis,
     },
     addressesHiddenMotivation: addressesHiddenMotivation(
       message,

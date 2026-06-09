@@ -1,8 +1,26 @@
+export type OperationalCompletenessProfile = {
+  ownerDefined: boolean;
+  pilotScopeDefined: boolean;
+  rollbackExists: boolean;
+  kpiSetDefined: boolean;
+  timelineDirectionallyDefined: boolean;
+};
+
+/** @deprecated Use OperationalCompletenessProfile */
+export type FeasibilityProfile = OperationalCompletenessProfile;
+
+export type ClosureReason = "commitment" | "decline" | "wrapUp";
+
+export type EndType = "manual" | "lost" | "concluded";
+
 export type ConversationStatus =
   | "active"
   | "conditionallyAccepted"
+  | "conditionallyAcceptedWin"
+  | "conclusion"
   | "lost"
-  | "userEnded";
+  | "userEnded"
+  | "concluded";
 
 export type HiddenMotivationType =
   | "team_capacity"
@@ -11,7 +29,7 @@ export type HiddenMotivationType =
   | "operational_stability"
   | "executive_visibility";
 
-/** Persistent relationship memory — does not reset between messages */
+/** Persistent relationship memory - does not reset between messages */
 export type RelationshipTrajectory = {
   /** Permanent floor of skepticism built from rupture history */
   skepticismBaseline: number;
@@ -21,6 +39,8 @@ export type RelationshipTrajectory = {
   peakRupture: number;
   /** Turns remaining with sharply reduced openness after escalation phrases */
   escalationMemoryTurns: number;
+  /** Consecutive turns with disrespectful or hostile communication */
+  negativeBehaviorStreak: number;
 };
 
 export type ScenarioState = {
@@ -35,11 +55,17 @@ export type ScenarioState = {
   conversationStatus: ConversationStatus;
   /** Soft acceptance readiness 0–100, recalculated each turn */
   readinessScore: number;
+  /** Cumulative operational completeness earned across the conversation */
+  operationalCompleteness: OperationalCompletenessProfile;
   relationshipTrajectory: RelationshipTrajectory;
-  /** Recurring claim themes already raised — no duplicates */
+  /** Recurring claim themes already raised - no duplicates */
   objectionMemory: string[];
-  /** Cumulative argument pressure — never decreases */
+  /** Cumulative argument pressure - never decreases */
   argumentFatigue: number;
+  /** Set when the conversation ends via natural closure detection */
+  closureReason?: ClosureReason;
+  /** How the session terminated - runtime gate, not a score outcome */
+  endType?: EndType;
 };
 
 export type Scenario = {
@@ -71,6 +97,10 @@ export type ToneSignals = {
   isEmpathetic: boolean;
   isAggressive: boolean;
   isHostile: boolean;
+  isDismissive: boolean;
+  isBlameLanguage: boolean;
+  isPressureTactic: boolean;
+  isPersonalAttack: boolean;
   isShort: boolean;
   hasEscalationLanguage: boolean;
   hasConfidenceClaim: boolean;
@@ -87,6 +117,11 @@ export type GoalSignals = {
   remainsVague: boolean;
   repeatsUnsupportedClaims: boolean;
   isPrematureSolutioning: boolean;
+  ownerDefined: boolean;
+  pilotScopeDefined: boolean;
+  rollbackExists: boolean;
+  kpiSetDefined: boolean;
+  timelineDirectionallyDefined: boolean;
 };
 
 export type MetricSignals = {
@@ -97,6 +132,10 @@ export type MetricSignals = {
   isInterruptionAttempt: boolean;
   specificityScore: number;
   evidenceScore: number;
+  showsCriticalThinking: boolean;
+  showsAdaptability: boolean;
+  showsHumanCenteredThinking: boolean;
+  showsSynthesis: boolean;
 };
 
 export type MessageAnalysis = {
@@ -108,12 +147,28 @@ export type MessageAnalysis = {
   addressesHiddenMotivation: boolean;
 };
 
+export function createInitialOperationalCompleteness(): OperationalCompletenessProfile {
+  return {
+    ownerDefined: false,
+    pilotScopeDefined: false,
+    rollbackExists: false,
+    kpiSetDefined: false,
+    timelineDirectionallyDefined: false,
+  };
+}
+
+/** @deprecated Use createInitialOperationalCompleteness */
+export function createInitialFeasibilityProfile(): OperationalCompletenessProfile {
+  return createInitialOperationalCompleteness();
+}
+
 export function createInitialRelationshipTrajectory(): RelationshipTrajectory {
   return {
     skepticismBaseline: 0,
     opennessPenalty: 0,
     peakRupture: 0,
     escalationMemoryTurns: 0,
+    negativeBehaviorStreak: 0,
   };
 }
 
