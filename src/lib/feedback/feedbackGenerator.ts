@@ -19,7 +19,7 @@ import {
 } from "./overallAssessment";
 import { buildScenarioInsights } from "./scenarioContext";
 import { OpeningScenario } from "../simulation/openingScenarioGenerator";
-import { StakeholderProfile } from "../simulation/stakeholderIdentity";
+import { ALICIA_MORGAN, StakeholderProfile } from "../simulation/stakeholderIdentity";
 import { Scenario, ScenarioState } from "../simulation/types";
 
 export type { CompetencyFeedback };
@@ -102,20 +102,13 @@ export function generateFeedbackReport(
     finalState
   );
 
-  const scenarioInsights =
-    sessionContext !== undefined
-      ? buildScenarioInsights(
-          sessionContext.stakeholder,
-          sessionContext.openingScenario,
-          finalState,
-          profile,
-          sessionSummary
-        )
-      : [
-          "Alicia's main concern was whether the initiative would create more work for an already stretched team.",
-          "Trust increased when you acknowledged capacity concerns directly.",
-          "The conversation improved when you shifted from convincing to collaborating.",
-        ];
+  const scenarioInsights = buildScenarioInsights(
+    sessionContext?.stakeholder ?? ALICIA_MORGAN,
+    finalState,
+    profile,
+    sessionSummary,
+    transcript
+  );
 
   return {
     overallAssessment,
