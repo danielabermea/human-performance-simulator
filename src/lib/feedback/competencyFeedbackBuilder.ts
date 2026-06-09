@@ -32,10 +32,13 @@ function alignLevelWithBehavior(
   profile: SessionBehaviorProfile
 ): BehavioralLevel {
   const level = scoreToBehavioralLevel(score);
-  const personalAttacks = profile.turns.filter((t) => t.dismissiveOrAggressive).length;
+  const personalAttacks = profile.turns.filter((t) => t.hostileOrPersonalAttack).length;
+  const dismissiveTurns = profile.turns.filter(
+    (t) => t.dismissiveOrAggressive && !t.hostileOrPersonalAttack
+  ).length;
   const escalations = profile.escalationUnderPressureCount;
 
-  if (personalAttacks === 0 && escalations === 0) {
+  if (personalAttacks === 0 && dismissiveTurns === 0 && escalations === 0) {
     return level;
   }
 
@@ -43,6 +46,9 @@ function alignLevelWithBehavior(
     case "emotionalIntelligence":
       if (personalAttacks >= 1) {
         return personalAttacks >= 2 ? "Emerging" : "Developing";
+      }
+      if (dismissiveTurns >= 1) {
+        return dismissiveTurns >= 2 ? "Developing" : "Competent";
       }
       if (escalations >= 2 && isStrongPerformanceLevel(level)) {
         return "Competent";
@@ -55,6 +61,9 @@ function alignLevelWithBehavior(
       }
       if (personalAttacks >= 2) {
         return "Developing";
+      }
+      if (dismissiveTurns >= 2 && isStrongPerformanceLevel(level)) {
+        return "Competent";
       }
       break;
     case "criticalThinkingDiscernment":
@@ -102,7 +111,7 @@ function buildSingleCompetencyFeedback(
     behavioralIndicators = [...behavioralIndicators, fallback].slice(0, 3);
   }
 
-  const keyMoment = selectKeyMoment(profile, competency, level);
+  const keyMoment = selectKeyMoment(profile, competency, level, evidenceBullets);
 
   return {
     key: competency,

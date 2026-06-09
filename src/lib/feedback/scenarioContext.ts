@@ -78,6 +78,11 @@ function describeWhatHelped(
     return null;
   }
 
+  const hasHostileLanguage = profile.turns.some((turn) => turn.hostileOrPersonalAttack);
+  if (hasHostileLanguage) {
+    return null;
+  }
+
   if (profile.trustDelta < 3) {
     return null;
   }
@@ -120,9 +125,21 @@ function describeWhatHurt(
     );
   }
 
-  if (profile.negativeInteractionCount >= 1) {
+  if (profile.turns.some((turn) => turn.hostileOrPersonalAttack)) {
     bullets.push(
-      "Dismissive or hostile language shifted the conversation away from the initiative and toward the interaction itself."
+      "Hostile or personal language shifted the conversation away from the initiative and toward the interaction itself."
+    );
+  } else if (
+    profile.turns.some(
+      (turn) => turn.dismissiveOrAggressive && !turn.hostileOrPersonalAttack
+    )
+  ) {
+    bullets.push(
+      "Dismissive or pressuring language made it harder for the stakeholder to stay engaged on the substance."
+    );
+  } else if (profile.turns.some((turn) => turn.passiveOrNonDirective)) {
+    bullets.push(
+      "Short agreement without next steps kept the conversation from moving toward a decision or resolution."
     );
   } else if (profile.escalationUnderPressureCount >= 1) {
     bullets.push(

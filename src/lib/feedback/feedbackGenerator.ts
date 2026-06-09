@@ -18,20 +18,40 @@ import {
   OutcomeLabel,
 } from "./overallAssessment";
 import { buildScenarioInsights } from "./scenarioContext";
+import {
+  assessFeedbackEvidence,
+  buildLowConfidenceNote,
+  AssessmentConfidence,
+  INSUFFICIENT_EVIDENCE_ASSESSMENT,
+} from "./assessmentEvidence";
 import { OpeningScenario } from "../simulation/openingScenarioGenerator";
 import { ALICIA_MORGAN, StakeholderProfile } from "../simulation/stakeholderIdentity";
 import { Scenario, ScenarioState } from "../simulation/types";
 
-export type { CompetencyFeedback };
+export type { CompetencyFeedback, AssessmentConfidence };
 
 export type FeedbackReport = {
   overallAssessment: string;
-  outcome: OutcomeLabel;
+  outcome: OutcomeLabel | null;
+  assessmentConfidence: AssessmentConfidence;
+  confidenceNote?: string;
   competencyFeedbacks: CompetencyFeedback[];
   strengths: string[];
   developmentAreas: string[];
   scenarioInsights: string[];
 };
+
+function buildInsufficientEvidenceReport(): FeedbackReport {
+  return {
+    overallAssessment: INSUFFICIENT_EVIDENCE_ASSESSMENT,
+    outcome: null,
+    assessmentConfidence: "none",
+    competencyFeedbacks: [],
+    strengths: [],
+    developmentAreas: [],
+    scenarioInsights: [],
+  };
+}
 
 export type FeedbackSessionContext = {
   stakeholder: StakeholderProfile;
@@ -47,6 +67,12 @@ export function generateFeedbackReport(
   initialState?: ScenarioState,
   sessionContext?: FeedbackSessionContext
 ): FeedbackReport {
+  const evidence = assessFeedbackEvidence(transcript);
+
+  if (evidence.confidence === "none") {
+    return buildInsufficientEvidenceReport();
+  }
+
   const sessionSummary = mapStateToSessionSummary({
     conversationStatus: finalState.conversationStatus,
     readinessScore: finalState.readinessScore,
@@ -113,6 +139,9 @@ export function generateFeedbackReport(
   return {
     overallAssessment,
     outcome,
+    assessmentConfidence: evidence.confidence,
+    confidenceNote:
+      evidence.confidence === "low" ? buildLowConfidenceNote(evidence) : undefined,
     competencyFeedbacks,
     strengths: coaching.strengths,
     developmentAreas: coaching.developmentAreas,

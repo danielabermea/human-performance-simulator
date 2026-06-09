@@ -5,6 +5,7 @@ export * from "./coachingFeedback";
 export * from "./competencyScoring";
 export * from "./executiveScoring";
 export * from "./feedbackGenerator";
+export * from "./assessmentEvidence";
 export * from "./competencyFeedbackBuilder";
 export {
   HACF_COMPETENCY_DEFINITIONS,

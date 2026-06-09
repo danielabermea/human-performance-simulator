@@ -764,20 +764,34 @@ export default function Home() {
 
               <section className="rounded-2xl bg-slate-50/80 p-5">
                 <h3 className="text-sm font-medium text-slate-900">
-                  Overall assessment
+                  Overall Assessment
                 </h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-700">
-                  <span className="font-medium">{feedback.outcome}.</span>{" "}
+                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700">
+                  {feedback.outcome && (
+                    <>
+                      <span className="font-medium">{feedback.outcome}.</span>{" "}
+                    </>
+                  )}
                   {feedback.overallAssessment}
                 </p>
               </section>
 
+              {feedback.confidenceNote && (
+                <section className="rounded-xl border border-slate-200 bg-white p-5">
+                  <p className="text-sm leading-relaxed text-slate-700">
+                    {feedback.confidenceNote}
+                  </p>
+                </section>
+              )}
+
+              {feedback.competencyFeedbacks.length > 0 && (
               <section className="space-y-3">
                 <h3 className="text-sm font-medium text-slate-900">Competencies</h3>
                 {feedback.competencyFeedbacks.map((comp) => (
                   <CompetencyAccordion key={comp.key} comp={comp} />
                 ))}
               </section>
+              )}
 
               {feedback.strengths.length > 0 && (
                 <section className="rounded-xl border border-slate-200 bg-slate-50/50 p-5">

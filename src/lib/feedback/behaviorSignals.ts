@@ -36,6 +36,9 @@ export type TurnBehaviorSignals = {
   // Negative behavioral signals (harmful interaction patterns)
   escalatedUnderPressure: boolean;
   dismissiveOrAggressive: boolean;
+  hostileOrPersonalAttack: boolean;
+  passiveOrNonDirective: boolean;
+  repeatedWithoutAdaptation: boolean;
   interruptedFlow: boolean;
   remainedVagueUnderChallenge: boolean;
   prematureSolutioning: boolean;
@@ -131,6 +134,11 @@ export function extractTurnBehaviorSignals(
     analysis.tone.isPressureTactic ||
     analysis.tone.isPersonalAttack;
 
+  const hostileOrPersonalAttack =
+    analysis.tone.isHostile ||
+    analysis.tone.isPersonalAttack ||
+    analysis.tone.isBlameLanguage;
+
   const invitedDialogue =
     analysis.metrics.questionCount >= 1 &&
     !dismissiveOrAggressive &&
@@ -146,11 +154,20 @@ export function extractTurnBehaviorSignals(
     !analysis.tone.hasEscalationLanguage &&
     !analysis.tone.isHostile;
 
+  const passiveOrNonDirective =
+    pressure &&
+    !dismissiveOrAggressive &&
+    !invitedDialogue &&
+    !substantiveEngagement &&
+    message.trim().length <= 80 &&
+    /^(yeah|yes|yep|for sure|sure|ok|okay|sounds good|got it|fair enough|will do|absolutely)\b/i.test(
+      message.trim()
+    );
+
   const escalatedUnderPressure =
     pressure &&
-    (dismissiveOrAggressive ||
-      analysis.tone.hasEscalationLanguage ||
-      ruptureDelta > 8);
+    !passiveOrNonDirective &&
+    (dismissiveOrAggressive || analysis.tone.hasEscalationLanguage);
 
   // RI: external stakeholder state movement
   const reducedStakeholderDefensiveness =
@@ -171,6 +188,16 @@ export function extractTurnBehaviorSignals(
 
   const perspectiveEngagement =
     invitedDialogue && (substantiveEngagement || trustDelta >= 0) && pressure;
+
+  const repeatedWithoutAdaptation =
+    pressure &&
+    !reframedAfterPushback &&
+    !perspectiveEngagement &&
+    !trustIncreased &&
+    !reducedStakeholderDefensiveness &&
+    !dismissiveOrAggressive &&
+    Boolean(previousUserMessage) &&
+    !strategyShift(message, previousUserMessage, analysis, true);
 
   const stakeholderFirstReasoning =
     pressure &&
@@ -214,6 +241,9 @@ export function extractTurnBehaviorSignals(
     recoveredAfterChallenge,
     escalatedUnderPressure,
     dismissiveOrAggressive,
+    hostileOrPersonalAttack,
+    passiveOrNonDirective,
+    repeatedWithoutAdaptation,
     interruptedFlow: analysis.metrics.isInterruptionAttempt,
     remainedVagueUnderChallenge:
       pressure && (analysis.goal.remainsVague || analysis.contentNegative.isDismissive),
@@ -630,46 +660,51 @@ function collectNegativeEvidenceBullets(
     const t = turn.turnIndex;
 
     if (competency === "emotionalIntelligence") {
-      if (turn.dismissiveOrAggressive) {
+      if (turn.hostileOrPersonalAttack) {
         bullets.push({
           turnIndex: t,
-          text: "Your language became dismissive or aggressive while the stakeholder was pushing back.",
+          text: "Hostile or personal language shifted the conversation away from the initiative.",
         });
-      }
-      if (turn.escalatedUnderPressure) {
+      } else if (turn.dismissiveOrAggressive) {
         bullets.push({
           turnIndex: t,
-          text: "Your tone or framing escalated while stakeholder pushback was present.",
+          text: "Dismissive or pressuring language made the stakeholder more guarded.",
         });
-      }
-      if (turn.interruptedFlow && !turn.dismissiveOrAggressive) {
+      } else if (turn.passiveOrNonDirective) {
         bullets.push({
           turnIndex: t,
-          text: "The exchange became harder to engage with when pressure increased.",
+          text: "Short agreement without a next step did not move the conversation forward.",
+        });
+      } else if (turn.escalatedUnderPressure) {
+        bullets.push({
+          turnIndex: t,
+          text: "Your tone became more pressuring while the stakeholder was pushing back.",
         });
       }
     }
 
     if (competency === "relationshipIntelligence") {
-      if (turn.dismissiveOrAggressive) {
+      if (turn.hostileOrPersonalAttack) {
+        bullets.push({
+          turnIndex: t,
+          text: "This response strained the relationship and reduced willingness to collaborate.",
+        });
+      } else if (turn.dismissiveOrAggressive) {
         bullets.push({
           turnIndex: t,
           text: "This response damaged rapport and made the stakeholder more guarded.",
         });
-      }
-      if (turn.trustDelta <= -4) {
+      } else if (turn.passiveOrNonDirective) {
+        bullets.push({
+          turnIndex: t,
+          text: "Agreeing without engaging the stakeholder's concerns left key relationship questions unresolved.",
+        });
+      } else if (turn.trustDelta <= -4) {
         bullets.push({
           turnIndex: t,
           text: "Trust dropped after this exchange, signaling relationship strain.",
         });
-      }
-      if (turn.ruptureDelta >= 6) {
-        bullets.push({
-          turnIndex: t,
-          text: "Tension spiked here, reducing willingness to collaborate.",
-        });
-      }
-      if (turn.resistanceDelta <= -4) {
+      } else if (turn.resistanceDelta <= -4) {
         bullets.push({
           turnIndex: t,
           text: "The stakeholder became more defensive after this response.",
@@ -693,7 +728,12 @@ function collectNegativeEvidenceBullets(
     }
 
     if (competency === "adaptabilityLearningAgility") {
-      if (
+      if (turn.repeatedWithoutAdaptation) {
+        bullets.push({
+          turnIndex: t,
+          text: "You continued with the same approach without adjusting when resistance appeared.",
+        });
+      } else if (
         turn.facedHighResistance &&
         !turn.reframedAfterPushback &&
         !turn.perspectiveEngagement
@@ -702,8 +742,12 @@ function collectNegativeEvidenceBullets(
           turnIndex: t,
           text: "You repeated your position without adjusting when resistance appeared.",
         });
-      }
-      if (turn.remainedVagueUnderChallenge) {
+      } else if (turn.passiveOrNonDirective) {
+        bullets.push({
+          turnIndex: t,
+          text: "You answered without adapting toward a decision or agreement.",
+        });
+      } else if (turn.remainedVagueUnderChallenge) {
         bullets.push({
           turnIndex: t,
           text: "You did not adapt with clearer reasoning when the stakeholder pressed for detail.",
@@ -712,22 +756,30 @@ function collectNegativeEvidenceBullets(
     }
 
     if (competency === "humanCenteredDecisionMaking") {
-      if (turn.dismissiveOrAggressive) {
+      if (turn.hostileOrPersonalAttack) {
+        bullets.push({
+          turnIndex: t,
+          text: "People impact and respect were overlooked in this exchange.",
+        });
+      } else if (turn.dismissiveOrAggressive) {
         bullets.push({
           turnIndex: t,
           text: "People impact and respect were overlooked in favor of pushing the proposal.",
         });
-      }
-      if (turn.safetyDelta <= -4) {
+      } else if (turn.prematureSolutioning) {
+        bullets.push({
+          turnIndex: t,
+          text: "You moved to solutions before the stakeholder's concerns were fully understood.",
+        });
+      } else if (turn.passiveOrNonDirective) {
+        bullets.push({
+          turnIndex: t,
+          text: "You did not address stakeholder impact before moving toward closure.",
+        });
+      } else if (turn.safetyDelta <= -4) {
         bullets.push({
           turnIndex: t,
           text: "The stakeholder seemed less safe raising concerns after this exchange.",
-        });
-      }
-      if (turn.respectDelta <= -4) {
-        bullets.push({
-          turnIndex: t,
-          text: "The stakeholder appeared less respected or heard following this response.",
         });
       }
     }
@@ -881,167 +933,227 @@ function addSessionTrajectoryBullets(
   return [...existing, ...extra];
 }
 
-function positiveTurnScore(turn: TurnBehaviorSignals, competency: CompetencyKey): number {
-  switch (competency) {
-    case "emotionalIntelligence":
-      return (
-        (turn.maintainedComposureUnderPressure ? 3 : 0) +
-        (turn.toneStabilized ? 2 : 0) +
-        (turn.recoveredAfterChallenge ? 4 : 0)
-      );
-    case "relationshipIntelligence":
-      return (
-        (turn.trustDelta >= 3 ? turn.trustDelta : 0) +
-        (turn.resistanceDelta >= 3 ? turn.resistanceDelta : 0) +
-        (turn.perspectiveEngagement ? 4 : 0) +
-        (turn.reducedStakeholderDefensiveness ? 3 : 0) +
-        (turn.ruptureDelta <= -3 ? Math.abs(turn.ruptureDelta) : 0)
-      );
-    case "criticalThinkingDiscernment":
-      return (
-        (turn.reasonedUnderUncertainty ? 5 : 0) +
-        (turn.substantiveEngagement ? 2 : 0)
-      );
-    case "adaptabilityLearningAgility":
-      return (
-        (turn.reframedAfterPushback ? 5 : 0) +
-        (turn.alignmentShift ? 4 : 0) +
-        (turn.resistanceDelta >= 3 ? turn.resistanceDelta : 0)
-      );
-    case "humanCenteredDecisionMaking":
-      return (
-        (turn.stakeholderFirstReasoning ? 5 : 0) +
-        (turn.safetyDelta >= 3 ? turn.safetyDelta : 0) +
-        (turn.respectDelta >= 3 ? turn.respectDelta : 0)
-      );
-  }
-}
+type MomentEvidence = {
+  turnIndex: number;
+  quote: string;
+  context: string;
+  score: number;
+};
 
-function negativeTurnScore(turn: TurnBehaviorSignals, competency: CompetencyKey): number {
-  switch (competency) {
-    case "emotionalIntelligence":
-      return (
-        (turn.dismissiveOrAggressive ? 10 : 0) +
-        (turn.escalatedUnderPressure ? 8 : 0) +
-        (turn.interruptedFlow ? 3 : 0) +
-        Math.max(0, turn.ruptureDelta)
-      );
-    case "relationshipIntelligence":
-      return (
-        (turn.dismissiveOrAggressive ? 10 : 0) +
-        (turn.trustDelta <= -3 ? Math.abs(turn.trustDelta) * 2 : 0) +
-        (turn.ruptureDelta >= 5 ? turn.ruptureDelta : 0) +
-        (turn.resistanceDelta <= -3 ? Math.abs(turn.resistanceDelta) : 0) +
-        (turn.interruptedFlow ? 4 : 0)
-      );
-    case "criticalThinkingDiscernment":
-      return (
-        (turn.remainedVagueUnderChallenge ? 8 : 0) +
-        (turn.prematureSolutioning ? 5 : 0)
-      );
-    case "adaptabilityLearningAgility":
-      return (
-        (turn.facedHighResistance &&
-        !turn.reframedAfterPushback &&
-        !turn.perspectiveEngagement
-          ? 7
-          : 0) + (turn.remainedVagueUnderChallenge ? 5 : 0)
-      );
-    case "humanCenteredDecisionMaking":
-      return (
-        (turn.dismissiveOrAggressive ? 10 : 0) +
-        (turn.safetyDelta <= -3 ? Math.abs(turn.safetyDelta) * 2 : 0) +
-        (turn.respectDelta <= -3 ? Math.abs(turn.respectDelta) * 2 : 0)
-      );
-  }
-}
-
-function positiveKeyMomentContext(
+function extractPositiveMomentEvidence(
   turn: TurnBehaviorSignals,
   competency: CompetencyKey
-): string {
+): MomentEvidence | null {
+  const quote = firstSentence(turn.quote);
+  let context: string | null = null;
+  let score = 0;
+
   switch (competency) {
     case "emotionalIntelligence":
       if (turn.recoveredAfterChallenge) {
-        return "You recovered composure after tension, which kept the conversation recoverable.";
+        score = 8;
+        context =
+          "You recovered composure after tension, which kept the conversation recoverable.";
+      } else if (turn.maintainedComposureUnderPressure) {
+        score = 6;
+        context =
+          "This moment reflects steady emotional regulation when the stakeholder challenged you.";
+      } else if (turn.toneStabilized) {
+        score = 4;
+        context = "Your tone stayed steady during a high-pressure exchange.";
       }
-      return "This moment reflects steady emotional regulation when the stakeholder challenged you.";
+      break;
     case "relationshipIntelligence":
-      if (turn.reducedStakeholderDefensiveness) {
-        return "This exchange reduced defensiveness and opened space for further dialogue.";
+      if (turn.perspectiveEngagement) {
+        score = 8;
+        context =
+          "Engaging the stakeholder's perspective here helped keep the dialogue constructive.";
+      } else if (turn.reducedStakeholderDefensiveness) {
+        score = 7;
+        context =
+          "This exchange reduced defensiveness and opened space for further dialogue.";
+      } else if (turn.invitedDialogue && turn.facedHighResistance) {
+        score = 5;
+        context = "Opening dialogue under resistance helped maintain engagement.";
       }
-      return "This moment helped build trust and kept the stakeholder willing to engage.";
+      break;
     case "criticalThinkingDiscernment":
-      return "This moment shows thoughtful reasoning when the stakeholder pressed for clarity.";
+      if (turn.reasonedUnderUncertainty) {
+        score = 8;
+        context =
+          "This moment shows thoughtful reasoning when the stakeholder pressed for clarity.";
+      } else if (turn.substantiveEngagement) {
+        score = 5;
+        context = "You grounded your message in specific detail rather than broad claims.";
+      }
+      break;
     case "adaptabilityLearningAgility":
       if (turn.reframedAfterPushback) {
-        return "You adapted your framing after pushback rather than repeating the same argument.";
+        score = 8;
+        context =
+          "You adapted your framing after pushback rather than repeating the same argument.";
+      } else if (turn.alignmentShift) {
+        score = 6;
+        context = "Adjusting here helped move the discussion toward alignment.";
       }
-      return "This moment reflects flexibility when resistance appeared.";
+      break;
     case "humanCenteredDecisionMaking":
       if (turn.stakeholderFirstReasoning) {
-        return "You prioritized stakeholder constraints before advancing the proposal.";
+        score = 8;
+        context =
+          "You prioritized stakeholder constraints before advancing the proposal.";
+      } else if (turn.safetyDelta >= 3) {
+        score = 5;
+        context = "This response made it easier for the stakeholder to raise concerns openly.";
       }
-      return "This moment balanced people impact with the change you were advocating.";
+      break;
   }
+
+  if (!context || score <= 0) return null;
+
+  return { turnIndex: turn.turnIndex, quote, context, score };
 }
 
-function negativeKeyMomentContext(
+function extractNegativeMomentEvidence(
   turn: TurnBehaviorSignals,
   competency: CompetencyKey
-): string {
+): MomentEvidence | null {
+  const quote = firstSentence(turn.quote);
+  let context: string | null = null;
+  let score = 0;
+
   switch (competency) {
     case "emotionalIntelligence":
-      if (turn.dismissiveOrAggressive) {
-        return "The conversation shifted from discussing concerns to attacking the stakeholder, increasing defensiveness and reducing trust.";
+      if (turn.hostileOrPersonalAttack) {
+        score = 10;
+        context =
+          "The conversation shifted from discussing concerns to attacking the stakeholder, increasing defensiveness and reducing trust.";
+      } else if (turn.dismissiveOrAggressive) {
+        score = 8;
+        context =
+          "Dismissive or pressuring language made the stakeholder more guarded under pushback.";
+      } else if (turn.passiveOrNonDirective) {
+        score = 6;
+        context =
+          "You agreed without moving the conversation toward a decision or clear next step.";
+      } else if (turn.escalatedUnderPressure) {
+        score = 5;
+        context =
+          "Your tone became more pressuring under pushback, which reduced openness.";
       }
-      if (turn.escalatedUnderPressure) {
-        return "Escalation here made the stakeholder more guarded and less willing to engage constructively.";
-      }
-      return "This moment reflects difficulty staying composed when the stakeholder pushed back.";
+      break;
     case "relationshipIntelligence":
-      if (turn.dismissiveOrAggressive) {
-        return "This exchange strained the relationship and reduced the stakeholder's willingness to collaborate.";
+      if (turn.hostileOrPersonalAttack) {
+        score = 10;
+        context =
+          "This exchange strained the relationship and reduced the stakeholder's willingness to collaborate.";
+      } else if (turn.dismissiveOrAggressive) {
+        score = 8;
+        context =
+          "This response damaged rapport and made the stakeholder more guarded.";
+      } else if (turn.passiveOrNonDirective) {
+        score = 6;
+        context =
+          "Agreeing without exploring the stakeholder's concerns left relationship questions unresolved.";
+      } else if (turn.trustDelta <= -4) {
+        score = 4;
+        context = "Trust decreased after this exchange.";
       }
-      return "Trust and openness decreased after this exchange, making alignment harder to reach.";
+      break;
     case "criticalThinkingDiscernment":
       if (turn.remainedVagueUnderChallenge) {
-        return "Staying vague here missed an opportunity to address the stakeholder's request for specifics.";
+        score = 8;
+        context =
+          "Staying vague here missed an opportunity to address the stakeholder's request for specifics.";
+      } else if (turn.prematureSolutioning) {
+        score = 6;
+        context =
+          "You moved to solutions before the stakeholder's concerns were fully understood.";
+      } else if (turn.passiveOrNonDirective) {
+        score = 5;
+        context =
+          "You continued answering at a surface level without clarifying the decision or trade-offs.";
       }
-      return "This moment reflects reasoning that did not meet the stakeholder's need for clarity.";
+      break;
     case "adaptabilityLearningAgility":
-      return "You did not adjust your approach when resistance appeared, limiting progress in the conversation.";
-    case "humanCenteredDecisionMaking":
-      if (turn.dismissiveOrAggressive) {
-        return "This response overlooked stakeholder impact and respect, eroding psychological safety.";
+      if (turn.repeatedWithoutAdaptation) {
+        score = 8;
+        context =
+          "You continued with the same approach without adjusting when resistance appeared.";
+      } else if (
+        turn.facedHighResistance &&
+        !turn.reframedAfterPushback &&
+        !turn.perspectiveEngagement
+      ) {
+        score = 6;
+        context =
+          "You did not adjust your approach when resistance appeared, limiting progress in the conversation.";
+      } else if (turn.passiveOrNonDirective) {
+        score = 5;
+        context =
+          "You continued answering operational questions but did not move the conversation toward a decision or agreement.";
       }
-      return "This moment reflects missed opportunities to center people impact in the discussion.";
+      break;
+    case "humanCenteredDecisionMaking":
+      if (turn.hostileOrPersonalAttack) {
+        score = 10;
+        context =
+          "This response overlooked stakeholder impact and respect, eroding psychological safety.";
+      } else if (turn.dismissiveOrAggressive) {
+        score = 8;
+        context =
+          "This response overlooked stakeholder impact in favor of pushing the proposal.";
+      } else if (turn.prematureSolutioning) {
+        score = 6;
+        context =
+          "You advanced the proposal before fully centering the stakeholder's people impact.";
+      } else if (turn.passiveOrNonDirective) {
+        score = 5;
+        context =
+          "You did not address stakeholder impact before moving toward closure.";
+      }
+      break;
   }
+
+  if (!context || score <= 0) return null;
+
+  return { turnIndex: turn.turnIndex, quote, context, score };
 }
 
 export function selectKeyMoment(
   profile: SessionBehaviorProfile,
   competency: CompetencyKey,
-  level: BehavioralLevel
+  level: BehavioralLevel,
+  evidenceBullets: GroundedEvidenceBullet[] = []
 ): KeyMoment {
   const polarity = evidencePolarityForLevel(level, profile, competency);
-  const scoreTurn =
-    polarity === "positive" ? positiveTurnScore : negativeTurnScore;
-  const contextFor =
-    polarity === "positive" ? positiveKeyMomentContext : negativeKeyMomentContext;
+  const extract =
+    polarity === "positive" ? extractPositiveMomentEvidence : extractNegativeMomentEvidence;
 
-  let best: TurnBehaviorSignals | undefined;
-  let bestScore = 0;
+  let best: MomentEvidence | undefined;
 
   for (const turn of profile.turns) {
-    const score = scoreTurn(turn, competency);
-    if (score > bestScore) {
-      bestScore = score;
-      best = turn;
+    const evidence = extract(turn, competency);
+    if (!evidence) continue;
+    if (!best || evidence.score > best.score) {
+      best = evidence;
     }
   }
 
-  if (!best || bestScore <= 0) {
+  if (!best) {
+    const anchored = evidenceBullets.find((bullet) => bullet.turnIndex >= 0);
+    if (anchored) {
+      const turn = profile.turns.find((item) => item.turnIndex === anchored.turnIndex);
+      if (turn) {
+        const evidence = extract(turn, competency);
+        if (evidence) {
+          best = evidence;
+        }
+      }
+    }
+  }
+
+  if (!best) {
     return {
       turnIndex: -1,
       quote: "",
@@ -1054,8 +1166,8 @@ export function selectKeyMoment(
 
   return {
     turnIndex: best.turnIndex,
-    quote: firstSentence(best.quote),
-    context: contextFor(best, competency),
+    quote: best.quote,
+    context: best.context,
   };
 }
 
