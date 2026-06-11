@@ -1,6 +1,5 @@
 import { ops_resistant_leader } from "@/lib/scenarios";
-import { buildConversationSetup } from "./conversationSetup";
-import { SUCCESS_LOOKS_LIKE, ScenarioDefinition } from "./scenarioDefinition";
+import { ScenarioDefinition } from "./scenarioDefinition";
 import {
   createSessionIdAvoidingStakeholder,
   StakeholderProfile,
@@ -13,12 +12,10 @@ import {
 } from "./sessionStore";
 
 export type ClientScenarioContext = {
-  userRoleLine: string;
-  scenarioContextLine: string;
+  scenarioNarrative: readonly string[];
   stakeholderName: string;
   stakeholderRole: string;
-  stakeholderMindset: string[];
-  successLooksLike: readonly string[];
+  stakeholderCaresAbout: readonly string[];
 };
 
 export type ClientSimulationSession = {
@@ -32,7 +29,6 @@ export type ClientSimulationSession = {
   };
   scenario: string;
   initialPrompt: string;
-  conversationSetup: string;
   scenarioContext: ClientScenarioContext;
 };
 
@@ -46,12 +42,10 @@ function toClientScenarioContext(
   stakeholder: StakeholderProfile
 ): ClientScenarioContext {
   return {
-    userRoleLine: definition.userRoleLine,
-    scenarioContextLine: definition.scenarioContextLine,
+    scenarioNarrative: definition.scenarioNarrative,
     stakeholderName: stakeholder.fullName,
     stakeholderRole: stakeholder.roleTitle,
-    stakeholderMindset: definition.stakeholderMindset,
-    successLooksLike: SUCCESS_LOOKS_LIKE,
+    stakeholderCaresAbout: definition.stakeholderCaresAbout,
   };
 }
 
@@ -71,11 +65,6 @@ export function toClientSimulationSession(
     },
     scenario: ops_resistant_leader.id,
     initialPrompt: session.openingScenario.content,
-    conversationSetup: buildConversationSetup(
-      sessionId,
-      session.stakeholder,
-      session.openingScenario.definition
-    ),
     scenarioContext: toClientScenarioContext(
       session.openingScenario.definition,
       session.stakeholder

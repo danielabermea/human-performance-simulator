@@ -9,6 +9,7 @@ import {
   PARTIAL_WIN_READINESS_MAX,
   PARTIAL_WIN_READINESS_MIN,
 } from "./executiveReadiness";
+import { deriveRelationshipState } from "./stakeholderBehavior";
 import { ConversationStatus, ScenarioState } from "./types";
 
 export function isTrustStable(state: ScenarioState): boolean {
@@ -30,14 +31,14 @@ export function buildAntiLoopPrompt(state: ScenarioState): string {
     return `ANTI-LOOP RULE (ACTIVE - user has demonstrated understanding):
 - The user has acknowledged your concerns and proposed a reasonable path
 - Do NOT ask for increasingly detailed operational information
-- Move toward alignment in 1–3 sentences — conditional yes, next step, or one short question
+- Express a decision: support, conditional support, defer, or reject — in 1–3 sentences
 - Real executives decide with imperfect information; stop interrogating`;
   }
 
   return `ANTI-LOOP RULE:
-- Once the user acknowledges concerns, demonstrates understanding, and proposes a reasonable path, stop escalating detail requests
-- Shift from interrogation toward alignment and decision-making
-- Avoid endless clarification cycles`;
+- Your goal is a decision under uncertainty — not eliminating every unknown
+- After the user provides substantive new information, move toward a position instead of another clarifying question
+- Avoid endless clarification cycles; prefer "I have enough to evaluate this internally" over stacking probes`;
 }
 
 export function buildExecutiveRealismPrompt(): string {
@@ -68,19 +69,18 @@ CONVERSATIONAL CLOSURE:
 }
 
 export function buildSkepticalModePrompt(state: ScenarioState): string {
-  const skeptical =
-    state.resistance >= 50 ||
-    state.ruptureLevel >= 40 ||
-    state.argumentFatigue > 30;
-
-  if (!skeptical || state.conversationStatus !== "active") {
+  if (state.conversationStatus !== "active") {
     return "";
   }
 
-  return `SKEPTICAL / GUARDED STANCE (active conversation):
-- Stay cautious and practical — protect team capacity and day-to-day work
-- Ask about workload, impact, and value in 1–3 sentences, not a lecture
-- You are uncertain, not hostile; willing to engage if the conversation is respectful and productive
+  const relationshipState = deriveRelationshipState(state);
+  if (relationshipState === "collaborative") {
+    return "";
+  }
+
+  return `ACTIVE EVALUATION (concerned or guarded):
+- Protect team capacity and day-to-day work — state concerns and react, do not chain questions
+- You are uncertain, not hostile; willing to engage if the conversation is respectful
 - Do not demand KPIs, ROI calculations, or FTE planning to continue the conversation`;
 }
 
@@ -119,10 +119,9 @@ export function buildConditionallyOpenPrompt(state: ScenarioState): string {
 
   if (state.conversationStatus === "conditionallyAcceptedWin") {
     return `BUILDING ALIGNMENT (readiness ${PARTIAL_WIN_READINESS_MIN}–${PARTIAL_WIN_READINESS_MAX}):
-- Warming but still cautious — keep replies to 1–3 complete sentences
-- Acknowledge good moves briefly, not in long paragraphs
-- Soften resistance gradually; one short question if needed
-- Concise professional tone, not fragmented speech`;
+- Shift toward collaborative — constructive and willing to problem-solve
+- Acknowledge good moves briefly: "That helps." / "I can work with that."
+- Prefer next steps or conditional support over new questions`;
   }
 
   if (state.conversationStatus !== "conditionallyAccepted") {
@@ -156,13 +155,11 @@ export function buildRelationshipDeteriorationPrompt(state: ScenarioState): stri
     return "";
   }
 
-  return `RELATIONSHIP DETERIORATION (trust, respect, and willingness to engage are eroding):
-- STOP asking helpful coaching questions designed to move the proposal forward
-- Challenge how the user is communicating — set boundaries directly
-- Express concern that the conversation is becoming difficult to engage with productively
-- Do NOT soften or invite collaboration until respect is restored
-- No exploratory "tell me more about your plan" questions while disrespect continues
-- Example tone: "I'm trying to understand your proposal, but this is becoming difficult to engage with."`;
+  return `RELATIONSHIP STRAIN (shift toward guarded or disengaging):
+- STOP interview-style questions — respond to how they are communicating
+- Name frustration or disrespect directly; set boundaries
+- Examples: "I don't feel like you're taking this concern seriously." / "That response feels dismissive." / "We're talking past each other."
+- Do NOT soften or invite collaboration until respect is restored`;
 }
 
 export function buildModeBehaviorPrompt(
@@ -174,9 +171,10 @@ export function buildModeBehaviorPrompt(
   switch (status) {
     case "active":
       return `ACTIVE MODE:
-- Skeptical, terse, protective of team capacity
-- 1–3 complete sentences: constraint or blunt question
-- Reward empathy and clarity with slightly warmer brevity — not longer replies
+- Lead with reaction, concern, or decision — not another clarification question
+- 1–3 complete sentences reflecting your current relationship state
+- After the user answers, acknowledge what landed and move toward a viewpoint or next step
+- Reward empathy and adaptation with warmer, more collaborative tone — not more questions
 
 ${buildRelationshipDeteriorationPrompt(state)}
 

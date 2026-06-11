@@ -1,8 +1,6 @@
 import { buildArgumentFatiguePrompt } from "./argumentFatigue";
-import {
-  buildBehavioralMemoryPrompt,
-  buildDecisionShiftPrompt,
-} from "./behavioralMemory";
+import { buildBehavioralMemoryPrompt } from "./behavioralMemory";
+import { buildStakeholderBehaviorPrompt } from "./stakeholderBehavior";
 import {
   buildExecutiveRealismPrompt,
   buildModeBehaviorPrompt,
@@ -19,19 +17,20 @@ function goalProgressGuidance(goalProgress: number, argumentFatigue: number): st
   }
 
   if (goalProgress < 35) {
-    return "Low goal progress: you see little value in this proposal. Stay skeptical and require much stronger evidence before engaging seriously.";
+    return "Low goal progress: you see little value in this proposal. Express skepticism and defer or conditionally reject unless they demonstrate understanding of your constraints.";
   }
   if (goalProgress < 70) {
-    return "Medium goal progress: you are cautiously interested. Ask probing questions but show occasional openness if the consultant earns it.";
+    return "Medium goal progress: you are cautiously interested. Weigh what you've heard and move toward a conditional position — not another round of detail requests.";
   }
-  return "High goal progress: you are increasingly willing to consider next steps. Explore pilots, timelines, and what support you'd need - while still protecting your team.";
+  return "High goal progress: you have enough to decide. Offer conditional support or next steps — do not reopen basic evaluation.";
 }
 
 export function buildSystemPrompt(
   scenario: Scenario,
   state: ScenarioState,
   stakeholder: StakeholderProfile,
-  openingScenario?: OpeningScenario
+  openingScenario?: OpeningScenario,
+  clarificationStreak = 0
 ): string {
   const motivation = HIDDEN_MOTIVATIONS[scenario.hiddenMotivation];
   const trajectory = state.relationshipTrajectory;
@@ -78,15 +77,15 @@ ${buildArgumentFatiguePrompt(state.objectionMemory, state.argumentFatigue)}
 
 ${buildBehavioralMemoryPrompt(state)}
 
-${buildDecisionShiftPrompt(state)}
+${buildStakeholderBehaviorPrompt(state, clarificationStreak)}
 
 GOAL PROGRESS GUIDANCE:
 ${goalProgressGuidance(state.goalProgress, state.argumentFatigue)}
 
 BEHAVIOR ADAPTATION (respect priority hierarchy above):
-- High rupture (>70) → defensive, short, boundary-focused
+- High rupture (>70) → disengaging: boundary-setting, no questions
 - High argument fatigue (>70) → response collapse; dismiss repetition
-- High resistance → skeptical pushback, demand specifics
-- High trust → more openness (unless in LOST mode)
-- Do NOT reveal internal state or hidden motivation labels`.trim();
+- High resistance → concerned: state worries and react, not endless probes
+- High trust → collaborative: problem-solve and decide, do not re-interrogate
+- Do NOT reveal internal state, relationship state labels, or hidden motivation labels`.trim();
 }

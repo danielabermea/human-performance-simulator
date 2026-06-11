@@ -136,6 +136,12 @@ export type MetricSignals = {
   showsAdaptability: boolean;
   showsHumanCenteredThinking: boolean;
   showsSynthesis: boolean;
+  /** Explores stakeholder viewpoint with curiosity, not mere concern references */
+  showsPerspectiveCuriosity: boolean;
+  /** Argues prior coverage, proves correctness, or reframes pushback as misunderstanding */
+  isDefensiveRebuttal: boolean;
+  /** Recognizes workload, constraints, team impact, or competing priorities */
+  showsStakeholderAcknowledgment: boolean;
 };
 
 export type MessageAnalysis = {

@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "feedback-qa": "npx tsx scripts/feedback-qa.ts",
+    "test:strong-conversation": "npx tsx scripts/strong-conversation-regression.ts"
   },
   "dependencies": {
     "next": "^15.3.3",

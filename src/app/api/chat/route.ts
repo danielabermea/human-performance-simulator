@@ -5,6 +5,7 @@ import {
   ops_resistant_leader,
   processUserMessage,
 } from "@/lib/scenarios";
+import { countConsecutiveClarificationQuestions } from "@/lib/simulation/stakeholderBehavior";
 import {
   getSessionStakeholderDisplay,
   getSimulationSession,
@@ -102,6 +103,9 @@ export async function POST(req: Request) {
     chatMessages.filter((m) => m.role === "assistant").at(-1)?.content;
 
   syncTranscript(session, chatMessages);
+  const clarificationStreak = countConsecutiveClarificationQuestions(
+    session.transcript
+  );
 
   // ── TERMINATION GATE (HIGHEST PRIORITY) ──────────────────────────────
   // Step 0: Manual end or already-terminated session - hard stop, no pipeline
@@ -169,7 +173,8 @@ export async function POST(req: Request) {
               ops_resistant_leader,
               session.state,
               session.stakeholder,
-              session.openingScenario
+              session.openingScenario,
+              clarificationStreak
             ),
           },
           ...chatMessages,
@@ -211,7 +216,8 @@ export async function POST(req: Request) {
           ops_resistant_leader,
           session.state,
           session.stakeholder,
-          session.openingScenario
+          session.openingScenario,
+          clarificationStreak
         ),
       },
       ...chatMessages,

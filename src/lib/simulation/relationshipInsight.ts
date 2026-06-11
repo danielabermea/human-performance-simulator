@@ -171,6 +171,6 @@ export function interpretRelationshipInsight(
   return {
     label: "They're still evaluating",
     guidance:
-      "Demonstrate understanding of their constraints. Ask clarifying questions rather than pushing for agreement.",
+      "Demonstrate understanding of their constraints. Move toward a conditional position when you have enough to decide.",
   };
 }

@@ -100,6 +100,39 @@ function applyArgumentFatigueEffects(
   return next;
 }
 
+function applyRelationshipTrustEffects(
+  state: ScenarioState,
+  analysis: MessageAnalysis
+): ScenarioState {
+  const next = { ...state };
+  const { goal, metrics } = analysis;
+  if (isRelationshipNegativeAnalysis(analysis)) return next;
+
+  const collabMultiplier =
+    collaborationMultiplier(state) * fatigueEvidenceMultiplier(state.argumentFatigue);
+
+  let trustDelta = 0;
+  let resistanceDelta = 0;
+
+  if (goal.acknowledgesConstraints) trustDelta += 5;
+  if (metrics.showsAdaptability) trustDelta += 5;
+  if (metrics.showsHumanCenteredThinking) trustDelta += 3;
+  if (metrics.hasRapportBuilding) trustDelta += 3;
+  if (metrics.showsSynthesis) trustDelta += 2;
+  if (metrics.hasValidation && (goal.acknowledgesConstraints || metrics.showsAdaptability)) {
+    trustDelta += 2;
+  }
+
+  if (trustDelta > 0) {
+    next.trust += Math.round(trustDelta * collabMultiplier);
+    resistanceDelta = Math.round((trustDelta / 3) * collabMultiplier);
+    next.resistance -= resistanceDelta;
+    next.frustration -= Math.min(Math.round(trustDelta / 2), 5);
+  }
+
+  return next;
+}
+
 function applyContentQualityEffects(
   state: ScenarioState,
   analysis: MessageAnalysis
@@ -112,9 +145,8 @@ function applyContentQualityEffects(
     evidenceTrustMultiplier(state) * fatigueEvidenceMultiplier(state.argumentFatigue);
 
   if (positiveCount > 0 && !isRelationshipNegativeAnalysis(analysis)) {
-    next.resistance -= Math.round(4 * positiveCount * evidenceMultiplier);
-    next.trust += Math.round(3 * positiveCount * evidenceMultiplier);
-    next.frustration -= Math.min(Math.round(2 * positiveCount * evidenceMultiplier), 6);
+    next.resistance -= Math.round(2 * positiveCount * evidenceMultiplier);
+    next.frustration -= Math.min(Math.round(positiveCount * evidenceMultiplier), 4);
     next.cognitiveLoad -= Math.min(positiveCount, 3);
   }
 
@@ -271,6 +303,7 @@ export function applyStateFromAnalysis(
   );
   next = applyArgumentFatigueEffects(next, analysis, message);
   next = applyContentQualityEffects(next, analysis);
+  next = applyRelationshipTrustEffects(next, analysis);
   next = applyGoalProgressEffects(next, analysis);
   next = applyToneAndRuptureEffects(next, analysis);
   next = applyNegativeBehaviorStreak(next, analysis);

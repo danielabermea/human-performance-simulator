@@ -1,4 +1,3 @@
-import { isExecutionMode } from "./executiveRealism";
 import { MessageAnalysis, RelationshipTrajectory, ScenarioState } from "./types";
 
 function clamp(value: number, min = 0, max = 100): number {
@@ -155,7 +154,7 @@ export function buildBehavioralMemoryPrompt(state: ScenarioState): string {
 
   if (skepticismBaseline >= 30) {
     lines.push(
-      `- Skepticism baseline is elevated (${skepticismBaseline}/65) - demand proof before moving forward`
+      `- Skepticism baseline is elevated (${skepticismBaseline}/65) - stay guarded, state concerns, defer rather than interrogate`
     );
   }
 
@@ -184,57 +183,14 @@ export function buildBehavioralMemoryPrompt(state: ScenarioState): string {
 
   if (state.trust >= 70) {
     lines.push(
-      "- High trust: claims are more readily accepted as plausible",
-      "- Fewer demands for evidence before engaging",
+      "- High trust: decide and co-design next steps — do not re-interrogate basics",
       "- Shift toward solution-oriented, collaborative responses"
     );
   } else if (state.trust < 45) {
     lines.push(
-      "- Low trust: treat all claims as unverified until substantiated"
+      "- Low trust: factual answers alone do not build trust — weight empathy, acknowledgment, and adaptation"
     );
   }
 
   return lines.join("\n");
-}
-
-export function buildDecisionShiftPrompt(state: ScenarioState): string {
-  if (isExecutionMode(state)) {
-    return `DECISION MODE - EXECUTION PLANNING (conditionally open, trust stable):
-- Collaborate on how to implement safely - not whether the idea has merit
-- Focus on phasing, staffing, metrics, rollback, and what gets deprioritized
-- Ask planning questions; avoid reopening fundamental skepticism unless new risk appears`;
-  }
-
-  if (state.conversationStatus === "conclusion") {
-    const highRisk =
-      state.ruptureLevel > 70 || state.trust < 50;
-    return `DECISION MODE - CLOSURE (relationship aligned):
-- Conditional support or positive conclusion language - no detail escalation
-- No additional skepticism probes unless high risk${
-      highRisk
-        ? " (ACTIVE: one focused concern allowed)"
-        : " (relationship is stable - close the conversation)"
-    }`;
-  }
-
-  const trust = state.trust;
-
-  if (trust < 45) {
-    return `DECISION MODE - TRUST BUILDING (low trust):
-- Prioritize whether the user understands your constraints before evaluating the proposal
-- Challenge unsupported claims - evaluate judgment and communication, not spreadsheets
-- Do not move toward alignment until they demonstrate empathy and perspective-taking`;
-  }
-
-  if (trust < 70) {
-    return `DECISION MODE - EVALUATION (medium trust):
-- Accept that some claims may be directionally valid - focus on how the user reasons and relates
-- Evaluate whether they understand people impact, risk, and disruption to current workload
-- Ask whether they are genuinely considering your team's reality`;
-  }
-
-  return `DECISION MODE - OPTIMIZATION (high trust):
-- Engage collaboratively on how to make the initiative work
-- Focus on refining approach, phasing, and success criteria
-- Less interrogation of basic claims - more joint problem-solving`;
 }

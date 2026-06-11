@@ -13,19 +13,24 @@ export type ExecutiveScores = CompetencyScores;
 export type CompetencyKey = keyof CompetencyScores;
 
 export type BehavioralLevel =
-  | "Emerging"
+  | "Demonstrated"
   | "Developing"
-  | "Competent"
-  | "Strong"
-  | "Advanced";
+  | "Not Yet Observed";
 
 export const BEHAVIORAL_LEVEL_ORDER: BehavioralLevel[] = [
-  "Emerging",
+  "Not Yet Observed",
   "Developing",
-  "Competent",
-  "Strong",
-  "Advanced",
+  "Demonstrated",
 ];
+
+export const BEHAVIORAL_LEVEL_EXPLANATIONS: Record<BehavioralLevel, string> = {
+  Demonstrated:
+    "Multiple observable behaviors aligned with this competency appeared during the conversation.",
+  Developing:
+    "Some behaviors were observed, but stronger application opportunities remained.",
+  "Not Yet Observed":
+    "There was insufficient evidence to evaluate this competency.",
+};
 
 export const HACF_COMPETENCY_LABELS: Record<CompetencyKey, string> = {
   emotionalIntelligence: "Emotional Intelligence",
@@ -61,26 +66,39 @@ export function createInitialScores(): CompetencyScores {
   };
 }
 
-/** Convert internal 0–100 score to 5-level behavioral scale for presentation */
+/** Convert internal 0–100 score to evidence-based assessment level */
 export function scoreToBehavioralLevel(score: number): BehavioralLevel {
-  if (score >= 81) return "Advanced";
-  if (score >= 65) return "Strong";
-  if (score >= 50) return "Competent";
+  if (score >= 60) return "Demonstrated";
   if (score >= 35) return "Developing";
-  return "Emerging";
+  return "Not Yet Observed";
 }
 
+export function isDemonstratedLevel(level: BehavioralLevel): boolean {
+  return level === "Demonstrated";
+}
+
+export function isDevelopingLevel(level: BehavioralLevel): boolean {
+  return level === "Developing";
+}
+
+/** @deprecated Use isDevelopingLevel */
+export function isEmergingLevel(level: BehavioralLevel): boolean {
+  return level === "Developing";
+}
+
+/** @deprecated Use isDemonstratedLevel */
 export function isStrongPerformanceLevel(level: BehavioralLevel): boolean {
-  return level === "Strong" || level === "Advanced";
+  return level === "Demonstrated";
 }
 
+/** @deprecated Use isEmergingLevel or level === "Not Yet Observed" */
 export function isDevelopmentPerformanceLevel(level: BehavioralLevel): boolean {
-  return level === "Emerging" || level === "Developing";
+  return level === "Not Yet Observed" || level === "Developing";
 }
 
-export function behavioralLevelToNumber(level: BehavioralLevel): 1 | 2 | 3 | 4 | 5 {
+export function behavioralLevelToNumber(level: BehavioralLevel): 1 | 2 | 3 {
   const index = BEHAVIORAL_LEVEL_ORDER.indexOf(level);
-  return (index + 1) as 1 | 2 | 3 | 4 | 5;
+  return (index + 1) as 1 | 2 | 3;
 }
 
 /** @deprecated Use scoreToBehavioralLevel */

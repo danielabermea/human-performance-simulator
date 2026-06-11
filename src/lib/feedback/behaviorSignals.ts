@@ -1,5 +1,5 @@
 import { MessageAnalysis, ScenarioState } from "../simulation/types";
-import { CompetencyKey, CompetencyScores, BehavioralLevel, isDevelopmentPerformanceLevel, isStrongPerformanceLevel } from "./hacfCompetencies";
+import { CompetencyKey, CompetencyScores, BehavioralLevel } from "./hacfCompetencies";
 
 /** Implicit behavioral signals extracted per user turn - no empathy keyword matching */
 export type TurnBehaviorSignals = {
@@ -30,6 +30,7 @@ export type TurnBehaviorSignals = {
   reasonedUnderUncertainty: boolean;
   perspectiveEngagement: boolean;
   stakeholderFirstReasoning: boolean;
+  acknowledgedStakeholderConcerns: boolean;
   toneStabilized: boolean;
   recoveredAfterChallenge: boolean;
 
@@ -64,6 +65,7 @@ export type SessionBehaviorProfile = {
   reasonedJudgmentCount: number;
   perspectiveEngagementCount: number;
   stakeholderFirstCount: number;
+  acknowledgedConcernsCount: number;
   toneStabilizationCount: number;
   recoveryCount: number;
   negativeInteractionCount: number;
@@ -142,7 +144,8 @@ export function extractTurnBehaviorSignals(
   const invitedDialogue =
     analysis.metrics.questionCount >= 1 &&
     !dismissiveOrAggressive &&
-    !analysis.metrics.isInterruptionAttempt;
+    !analysis.metrics.isInterruptionAttempt &&
+    !analysis.metrics.isDefensiveRebuttal;
 
   const substantiveEngagement =
     messageSubstance(analysis) && !analysis.goal.remainsVague;
@@ -187,7 +190,11 @@ export function extractTurnBehaviorSignals(
     pressure;
 
   const perspectiveEngagement =
-    invitedDialogue && (substantiveEngagement || trustDelta >= 0) && pressure;
+    pressure &&
+    analysis.metrics.showsPerspectiveCuriosity &&
+    !analysis.metrics.isDefensiveRebuttal &&
+    !dismissiveOrAggressive &&
+    !hostileOrPersonalAttack;
 
   const repeatedWithoutAdaptation =
     pressure &&
@@ -204,6 +211,11 @@ export function extractTurnBehaviorSignals(
     substantiveEngagement &&
     !dismissiveOrAggressive &&
     (trustIncreased || safetyDelta >= 3 || reducedStakeholderDefensiveness);
+
+  const acknowledgedStakeholderConcerns =
+    analysis.metrics.showsStakeholderAcknowledgment &&
+    !dismissiveOrAggressive &&
+    !hostileOrPersonalAttack;
 
   const toneStabilized =
     pressure &&
@@ -237,6 +249,7 @@ export function extractTurnBehaviorSignals(
     reasonedUnderUncertainty,
     perspectiveEngagement,
     stakeholderFirstReasoning,
+    acknowledgedStakeholderConcerns,
     toneStabilized,
     recoveredAfterChallenge,
     escalatedUnderPressure,
@@ -277,6 +290,7 @@ export function buildSessionBehaviorProfile(
     reasonedJudgmentCount: count((t) => t.reasonedUnderUncertainty),
     perspectiveEngagementCount: count((t) => t.perspectiveEngagement),
     stakeholderFirstCount: count((t) => t.stakeholderFirstReasoning),
+    acknowledgedConcernsCount: count((t) => t.acknowledgedStakeholderConcerns),
     toneStabilizationCount: count((t) => t.toneStabilized),
     recoveryCount: count((t) => t.recoveredAfterChallenge),
     negativeInteractionCount: count(
@@ -502,8 +516,8 @@ function evidencePolarityForLevel(
   profile: SessionBehaviorProfile,
   competency: CompetencyKey
 ): EvidencePolarity {
-  if (isStrongPerformanceLevel(level)) return "positive";
-  if (isDevelopmentPerformanceLevel(level)) return "negative";
+  if (level === "Demonstrated") return "positive";
+  if (level === "Not Yet Observed") return "negative";
 
   return inferDominantPolarity(profile, competency);
 }
@@ -1199,7 +1213,7 @@ export type BehavioralEvidenceObservation = {
 export function extractBehavioralEvidence(
   profile: SessionBehaviorProfile,
   competency: CompetencyKey,
-  level: BehavioralLevel = "Competent"
+  level: BehavioralLevel = "Developing"
 ): BehavioralEvidenceObservation[] {
   return extractGroundedEvidence(profile, competency, level).map((b) => ({
     turnIndex: b.turnIndex,

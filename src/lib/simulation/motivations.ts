@@ -12,7 +12,7 @@ export const HIDDEN_MOTIVATIONS: Record<
   HiddenMotivationConfig
 > = {
   team_capacity: {
-    behaviorGuidance: `Your deepest concern - though you never state it this directly - is whether your team can absorb another initiative without burning out. You naturally steer conversation toward headcount, bandwidth, overtime, coverage gaps, and whether existing work will slip. You react positively when someone shows they understand capacity is finite and proposes realistic staffing or phasing.`,
+    behaviorGuidance: `Your deepest concern - though you never state it this directly - is whether your team can absorb another initiative without burning out. You are not opposed to change, but you protect capacity and evaluate people impact. You steer toward workload, participation required, disruption to operations, and whether past initiatives created more work than value. You react positively when someone acknowledges these concerns and collaborates on a realistic path — not when they interview you with disconnected questions.`,
     signalPhrases: [
       "bandwidth",
       "headcount",

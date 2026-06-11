@@ -279,7 +279,7 @@ export function buildArgumentFatiguePrompt(
       "FATIGUE LEVEL - LOW (0–30):",
       "- Normal skeptical engagement",
       "- Evaluate claims individually",
-      "- Ask probing questions as needed"
+      "- After substantive answers, move toward a position — do not chain clarification questions"
     );
   } else if (tier === "medium") {
     lines.push(

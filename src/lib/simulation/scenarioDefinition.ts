@@ -27,22 +27,34 @@ export type ScenarioDefinition = {
   communicationObjective: string;
   /** Standard sharp-format scenario prompt for AI and feedback */
   scenarioPrompt: string;
-  /** Brief line for instruction panel (no "You are a" prefix) */
-  userRoleLine: string;
-  /** One-line scenario context for the brief */
-  scenarioContextLine: string;
+  /** Narrative scenario shown before the conversation starts */
+  scenarioNarrative: readonly string[];
+  /** Stakeholder priorities shown in the setup panel */
+  stakeholderCaresAbout: readonly string[];
 };
 
-export const USER_ROLE_LINE = "Consultant leading a workplace initiative";
+export const SCENARIO_NARRATIVE = [
+  "You are leading a change initiative designed to improve how work is done across the organization. It will require time and participation from Alicia's team.",
+  "You do not have direct authority over Alicia's team, so progress depends on trust, credibility, and collaboration.",
+  "This is your first conversation with her. Past initiatives have sometimes created more work than value, so she is cautious about committing her team's time and attention.",
+  "Your goal is to understand her concerns, build trust, and determine whether there is a path forward.",
+] as const;
 
-export const SCENARIO_CONTEXT_LINE =
-  "Meeting with a stakeholder whose team will be affected by the initiative.";
+export const STAKEHOLDER_CARES_ABOUT = [
+  "Workload impact",
+  "Competing priorities",
+  "Disruption to operations",
+  "More work than value",
+  "People impact",
+] as const;
 
-const USER_ROLE_INTRO = `You are a consultant leading a significant workplace initiative.
+const USER_ROLE_INTRO = `You are leading a change initiative designed to improve how work is done across the organization. It will require time and participation from Alicia's team.
 
-You are meeting with a stakeholder whose team will be affected by the change.
+You do not have direct authority over Alicia's team, so progress depends on trust, credibility, and collaboration.
 
-The stakeholder is concerned about workload, competing priorities, and whether the initiative will create more work than value.`;
+This is your first conversation with her. She is not opposed to change, but she is responsible for operational execution and protecting her team's capacity.
+
+Your goal is to understand her concerns, build trust, and determine whether there is a path forward.`;
 
 const STAKEHOLDER_ROLE_LABELS: Record<StakeholderRoleCategory, string> = {
   project_manager: "Project Manager",
@@ -154,14 +166,14 @@ export function buildScenarioDefinition(
     stakeholderMindset,
     communicationObjective: COMMUNICATION_OBJECTIVE,
     scenarioPrompt,
-    userRoleLine: USER_ROLE_LINE,
-    scenarioContextLine: SCENARIO_CONTEXT_LINE,
+    scenarioNarrative: SCENARIO_NARRATIVE,
+    stakeholderCaresAbout: STAKEHOLDER_CARES_ABOUT,
   };
 }
 
 export function buildScenarioDefinitionPrompt(definition: ScenarioDefinition): string {
-  return `SCENARIO DEFINITION (background context for the user — never read aloud or expose as meta-commentary):
+  return `SCENARIO DEFINITION (background context — never read aloud or expose as meta-commentary):
 ${definition.scenarioPrompt}
 
-You are ${definition.stakeholderName}, ${definition.stakeholderRoleTitle}. Stay in character. The user is a consultant leading a significant workplace initiative.`;
+You are ${definition.stakeholderName}, ${definition.stakeholderRoleTitle}. Stay in character. This is the first conversation with someone leading a change initiative that requires your team's participation. They have no direct authority over your team.`;
 }

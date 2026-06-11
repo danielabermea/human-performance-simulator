@@ -1,8 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { FeedbackReport } from "@/lib/feedback";
-import { HACF_COMPETENCY_DEFINITIONS, isDevelopmentPerformanceLevel } from "@/lib/feedback/hacfCompetencies";
+import { CoachingSuggestion, FeedbackReport, GrowthOpportunity, SkillHighlight } from "@/lib/feedback";
 import { ChatMessage } from "@/lib/prompts";
 import { ClientSimulationSession } from "@/lib/simulation/clientSession";
 import { interpretLeaderState } from "@/lib/simulation/interpretLeaderState";
@@ -21,6 +20,8 @@ function isTerminalConversationStatus(
 }
 
 const CONTENT_MAX = "max-w-[900px]";
+const TEXTAREA_MIN_HEIGHT_PX = 44;
+const TEXTAREA_MAX_HEIGHT_PX = 200;
 
 function openingMessageFromSession(session: ClientSimulationSession): ChatMessage {
   return { role: "assistant", content: session.initialPrompt };
@@ -45,83 +46,6 @@ function LoadingIndicator() {
   );
 }
 
-function BriefIcon({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-600">
-      {children}
-    </span>
-  );
-}
-
-function RoleIcon() {
-  return (
-    <BriefIcon>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-        <path
-          d="M3 5.5V13h10V5.5M2 5.5h12M5.5 5.5V4a2.5 2.5 0 015 0v1.5"
-          stroke="currentColor"
-          strokeWidth="1.25"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </BriefIcon>
-  );
-}
-
-function StakeholderIcon() {
-  return (
-    <BriefIcon>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-        <circle cx="8" cy="5" r="2.25" stroke="currentColor" strokeWidth="1.25" />
-        <path
-          d="M3.5 13c0-2.485 2.015-4.5 4.5-4.5s4.5 2.015 4.5 4.5"
-          stroke="currentColor"
-          strokeWidth="1.25"
-          strokeLinecap="round"
-        />
-      </svg>
-    </BriefIcon>
-  );
-}
-
-function MindsetIcon() {
-  return (
-    <BriefIcon>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-        <path
-          d="M8 2.5a4.5 4.5 0 00-4.5 4.5c0 1.6.8 3 2 3.8V12h5v-1.2c1.2-.8 2-2.2 2-3.8A4.5 4.5 0 008 2.5z"
-          stroke="currentColor"
-          strokeWidth="1.25"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M6.5 13.5h3"
-          stroke="currentColor"
-          strokeWidth="1.25"
-          strokeLinecap="round"
-        />
-      </svg>
-    </BriefIcon>
-  );
-}
-
-function SuccessIcon() {
-  return (
-    <BriefIcon>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-        <path
-          d="M3 8.5l3 3 7-7"
-          stroke="currentColor"
-          strokeWidth="1.25"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </BriefIcon>
-  );
-}
-
 function StakeholderAvatar({
   name,
   size = "md",
@@ -142,27 +66,6 @@ function StakeholderAvatar({
   );
 }
 
-type BriefFieldProps = {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-  className?: string;
-};
-
-function BriefField({ icon, label, children, className = "" }: BriefFieldProps) {
-  return (
-    <div className={`flex gap-3.5 ${className}`}>
-      {icon}
-      <div className="min-w-0 flex-1 pt-0.5">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-          {label}
-        </p>
-        <div className="mt-1.5 text-sm leading-relaxed text-slate-700">{children}</div>
-      </div>
-    </div>
-  );
-}
-
 type LeaderSnapshot = {
   trust: number;
   resistance: number;
@@ -172,79 +75,63 @@ type LeaderSnapshot = {
   negativeBehaviorStreak: number;
 };
 
-type SimulationBriefCardProps = {
-  expanded: boolean;
-  onToggle: () => void;
-  scenarioContext: NonNullable<ClientSimulationSession["scenarioContext"]>;
-};
-
-function SimulationBriefCard({
-  expanded,
-  onToggle,
+function SimulationSetupCard({
   scenarioContext,
-}: SimulationBriefCardProps) {
-  return (
-    <section className="sim-card-brief overflow-hidden" aria-label="Simulation brief">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50/80"
-        aria-expanded={expanded}
-      >
-        <p className="text-sm font-medium text-slate-700">Simulation Brief</p>
-        <span
-          className={`shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`}
-          aria-hidden
-        >
-          ▾
-        </span>
-      </button>
+}: {
+  scenarioContext: NonNullable<ClientSimulationSession["scenarioContext"]>;
+}) {
+  const stakeholderFirstName =
+    scenarioContext.stakeholderName.split(/\s+/)[0] ?? scenarioContext.stakeholderName;
 
-      {expanded && (
-        <div className="space-y-5 border-t border-slate-100 px-4 pb-4 pt-3">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <BriefField icon={<RoleIcon />} label="Role">
-              {scenarioContext.userRoleLine}
-            </BriefField>
-            <BriefField icon={<StakeholderIcon />} label="Stakeholder">
-              {scenarioContext.stakeholderName}, {scenarioContext.stakeholderRole}
-            </BriefField>
-            <BriefField icon={<MindsetIcon />} label="Stakeholder Mindset">
-              <ul className="space-y-1.5">
-                {scenarioContext.stakeholderMindset.map((item) => (
-                  <li key={item} className="flex gap-2">
-                    <span className="text-slate-300" aria-hidden>
-                      •
-                    </span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </BriefField>
-            <BriefField icon={<SuccessIcon />} label="Success Looks Like">
-              <ul className="space-y-1.5">
-                {scenarioContext.successLooksLike.map((item) => (
-                  <li key={item} className="flex gap-2">
-                    <span className="text-slate-300" aria-hidden>
-                      •
-                    </span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </BriefField>
-          </div>
+  return (
+    <section
+      className="sim-card-brief space-y-5 px-5 py-4"
+      aria-label="Simulation setup"
+    >
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+          Scenario
+        </p>
+        <ul className="mt-2 space-y-1.5 text-sm leading-relaxed text-slate-700">
+          {scenarioContext.scenarioNarrative.map((item) => (
+            <li key={item} className="flex gap-2">
+              <span className="text-slate-300" aria-hidden>
+                •
+              </span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            Stakeholder
+          </p>
+          <p className="mt-2 text-sm font-medium text-slate-900">
+            {scenarioContext.stakeholderName}
+          </p>
+          <p className="text-sm text-slate-600">{scenarioContext.stakeholderRole}</p>
         </div>
-      )}
-    </section>
-  );
-}
 
-function ConversationSetupLine({ text }: { text: string }) {
-  return (
-    <p className="text-sm leading-snug text-slate-500" aria-label="Conversation setup">
-      {text}
-    </p>
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            What {stakeholderFirstName} Cares About
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-slate-700">
+            {scenarioContext.stakeholderCaresAbout.map((item) => (
+              <li key={item} className="flex gap-2">
+                <span className="text-slate-300" aria-hidden>
+                  •
+                </span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -298,77 +185,195 @@ function ConversationInsightCard({
   );
 }
 
-function FeedbackBulletList({ items }: { items: string[] }) {
+function WhatWorkedList({ items }: { items: string[] }) {
   return (
-    <ul className="feedback-bullet-list mt-2 space-y-2 text-sm text-slate-700">
+    <ul className="mt-2 space-y-2.5 text-sm text-slate-700">
       {items.map((item, index) => (
-        <li key={`${index}-${item.slice(0, 24)}`}>{item}</li>
+        <li key={`${index}-${item.slice(0, 24)}`} className="flex gap-2.5">
+          <span className="shrink-0 text-emerald-600" aria-hidden>
+            ✓
+          </span>
+          <span>{item}</span>
+        </li>
       ))}
     </ul>
   );
 }
 
-function AccordionChevron() {
+function StrengthenConversationList({ items }: { items: CoachingSuggestion[] }) {
   return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 18 18"
-      fill="none"
-      aria-hidden
-      className="shrink-0 text-[var(--primary)] transition-transform duration-200 group-open:rotate-180"
-    >
-      <path
-        d="M4.5 6.75L9 11.25L13.5 6.75"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <ul className="mt-2 space-y-5 text-sm text-slate-700">
+      {items.map((item, index) => (
+        <li
+          key={`${index}-${item.observed.slice(0, 24)}`}
+          className="space-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3.5"
+        >
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              Observed
+            </p>
+            <p className="mt-1 leading-relaxed">{item.observed}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              Try Instead
+            </p>
+            <p className="mt-1 leading-relaxed text-slate-800">
+              &ldquo;{item.suggestedAlternative}&rdquo;
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              Why
+            </p>
+            <p className="mt-1 leading-relaxed text-slate-600">{item.explanation}</p>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
-type CompetencyFeedbackItem = FeedbackReport["competencyFeedbacks"][number];
-
-function CompetencyAccordion({ comp }: { comp: CompetencyFeedbackItem }) {
-  const evidenceLabel = isDevelopmentPerformanceLevel(comp.level)
-    ? "Observed Behaviors"
-    : "Behavioral Indicators";
-
+function ConversationReflectionPanel() {
   return (
-    <details className="feedback-accordion group sim-card overflow-hidden transition hover:border-slate-300">
-      <summary className="flex cursor-pointer items-center justify-between gap-3 px-5 py-4 text-sm font-medium text-slate-900 transition group-hover:bg-slate-50/80">
-        <span>
-          {comp.name} — {comp.level}
-        </span>
-        <AccordionChevron />
-      </summary>
-      <div className="space-y-5 border-t border-slate-100 px-5 pb-5 pt-4 text-sm text-slate-700">
-        <p className="leading-relaxed text-slate-600">
-          {HACF_COMPETENCY_DEFINITIONS[comp.key]}
+    <section className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 text-sm">
+      <h3 className="text-sm font-medium text-slate-900">Conversation Reflection</h3>
+      <div className="mt-4 space-y-3 leading-relaxed text-slate-700">
+        <p className="font-medium text-slate-900">No coaching available yet.</p>
+        <p>You ended the simulation before sending a response.</p>
+        <p>
+          Engage in a short conversation with the stakeholder to receive personalized
+          coaching and feedback.
         </p>
-
-        <div>
-          <p className="font-medium text-slate-800">{evidenceLabel}</p>
-          <FeedbackBulletList items={comp.behavioralIndicators} />
-        </div>
-
-        <div>
-          <p className="font-medium text-slate-800">Key moment</p>
-          {comp.keyMoment.quote ? (
-            <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-              <p className="italic text-slate-600">
-                &ldquo;{comp.keyMoment.quote}&rdquo;
-              </p>
-              <p className="mt-1.5 text-slate-600">{comp.keyMoment.context}</p>
-            </div>
-          ) : (
-            <p className="mt-2 text-slate-600">{comp.keyMoment.context}</p>
-          )}
-        </div>
       </div>
-    </details>
+      <p className="mt-4 text-xs text-slate-500">
+        Conversation length: Not enough evidence
+      </p>
+    </section>
+  );
+}
+
+function SkillHighlightCard({ highlight }: { highlight: SkillHighlight }) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+        Biggest Strength
+      </p>
+      <h4 className="mt-2 font-medium text-slate-900">{highlight.skillName}</h4>
+      <dl className="mt-3 space-y-3">
+        <div>
+          <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            Observed
+          </dt>
+          <dd className="mt-1 leading-relaxed text-slate-700">{highlight.observed}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            Why It Matters
+          </dt>
+          <dd className="mt-1 leading-relaxed text-slate-600">{highlight.whyItMatters}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+function GrowthOpportunityCard({ opportunity }: { opportunity: GrowthOpportunity }) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+        Growth Opportunity
+      </p>
+      <h4 className="mt-2 font-medium text-slate-900">{opportunity.skillName}</h4>
+      <dl className="mt-3 space-y-3">
+        <div>
+          <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            Observed
+          </dt>
+          <dd className="mt-1 leading-relaxed text-slate-700">{opportunity.observed}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            Try Instead
+          </dt>
+          <dd className="mt-1 leading-relaxed text-slate-800">
+            &ldquo;{opportunity.tryInstead}&rdquo;
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            Why It Matters
+          </dt>
+          <dd className="mt-1 leading-relaxed text-slate-600">{opportunity.whyItMatters}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+function TranscriptThread({
+  messages,
+  firstAssistantIndex,
+  stakeholderName,
+  stakeholderRole,
+  isLoading,
+  messagesEndRef,
+}: {
+  messages: ChatMessage[];
+  firstAssistantIndex: number;
+  stakeholderName: string;
+  stakeholderRole: string;
+  isLoading: boolean;
+  messagesEndRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  return (
+    <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+      {messages.length > 0 && firstAssistantIndex >= 0 && (
+        <OpeningMessageCard
+          name={stakeholderName}
+          role={stakeholderRole}
+          content={messages[firstAssistantIndex].content}
+        />
+      )}
+
+      {messages.map((msg, i) => {
+        const isAssistant = msg.role === "assistant";
+        const isFirstAssistant = i === firstAssistantIndex;
+
+        if (isAssistant) {
+          if (isFirstAssistant) return null;
+
+          return (
+            <article key={i} className="max-w-[92%]">
+              <p className="mb-1 text-xs font-medium text-slate-500">
+                {stakeholderName}
+              </p>
+              <div className="rounded-xl rounded-tl-sm border border-slate-200 bg-white px-4 py-3">
+                <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-slate-800">
+                  {msg.content}
+                </p>
+              </div>
+            </article>
+          );
+        }
+
+        return (
+          <div key={i} className="flex justify-end pl-12 sm:pl-20">
+            <div className="max-w-[85%] rounded-xl rounded-br-sm bg-[var(--user-bubble)] px-4 py-3 text-[15px] leading-relaxed text-[var(--user-text)]">
+              <p className="whitespace-pre-wrap">{msg.content}</p>
+            </div>
+          </div>
+        );
+      })}
+
+      {isLoading && (
+        <div className="max-w-[92%] rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <LoadingIndicator />
+        </div>
+      )}
+
+      <div ref={messagesEndRef} />
+    </div>
   );
 }
 
@@ -395,9 +400,22 @@ export default function Home() {
   const [previousLeaderSnapshot, setPreviousLeaderSnapshot] =
     useState<LeaderSnapshot | null>(null);
   const [lastTurnDisrespectful, setLastTurnDisrespectful] = useState(false);
-  const [briefExpanded, setBriefExpanded] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const adjustTextareaHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    const nextHeight = Math.min(
+      Math.max(textarea.scrollHeight, TEXTAREA_MIN_HEIGHT_PX),
+      TEXTAREA_MAX_HEIGHT_PX
+    );
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY =
+      textarea.scrollHeight > TEXTAREA_MAX_HEIGHT_PX ? "auto" : "hidden";
+  }, []);
 
   const inputEnabled =
     simulationSession !== null &&
@@ -425,7 +443,6 @@ export default function Home() {
     });
     setPreviousLeaderSnapshot(null);
     setLastTurnDisrespectful(false);
-    setBriefExpanded(true);
   }, []);
 
   const bootstrapSimulation = useCallback(async () => {
@@ -456,6 +473,10 @@ export default function Home() {
   useEffect(() => {
     bootstrapSimulation();
   }, [bootstrapSimulation]);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input, adjustTextareaHeight]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -545,7 +566,6 @@ export default function Home() {
     setInput("");
     setError(null);
     setIsLoading(true);
-    setBriefExpanded(false);
 
     try {
       const res = await fetch("/api/chat", {
@@ -666,20 +686,9 @@ export default function Home() {
         </header>
 
         <main className="flex min-h-0 flex-1 flex-col gap-4">
-          {!conversationEnded && scenarioContext && (
-            <SimulationBriefCard
-              expanded={briefExpanded}
-              onToggle={() => setBriefExpanded((prev) => !prev)}
-              scenarioContext={scenarioContext}
-            />
+          {!conversationEnded && scenarioContext && !hasUserMessage && (
+            <SimulationSetupCard scenarioContext={scenarioContext} />
           )}
-
-          {!conversationEnded &&
-            simulationSession &&
-            !hasUserMessage &&
-            simulationSession.conversationSetup && (
-              <ConversationSetupLine text={simulationSession.conversationSetup} />
-            )}
 
           {showConversationInsight && hasUserMessage && (
             <ConversationInsightCard
@@ -688,136 +697,124 @@ export default function Home() {
             />
           )}
 
-          <div
-            className={`min-h-0 flex flex-col gap-3 ${
-              feedback
-                ? "max-h-[38dvh] shrink-0 overflow-y-auto sm:max-h-[42dvh]"
-                : "flex-1 overflow-y-auto"
-            }`}
-          >
-            {isBootstrapping && messages.length === 0 && (
-              <div className="flex justify-center py-20">
-                <LoadingIndicator />
-              </div>
-            )}
+          {isBootstrapping && messages.length === 0 && (
+            <div className="flex flex-1 justify-center py-20">
+              <LoadingIndicator />
+            </div>
+          )}
 
-            {simulationSession && messages.length > 0 && firstAssistantIndex >= 0 && (
-              <OpeningMessageCard
-                name={stakeholderName}
-                role={stakeholderRole}
-                content={messages[firstAssistantIndex].content}
-              />
-            )}
+          {feedback ? (
+            <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-2 lg:items-start">
+              <section className="flex min-h-0 flex-col gap-3 lg:sticky lg:top-8 lg:max-h-[calc(100dvh-8rem)]">
+                <h2 className="text-sm font-medium text-slate-900">Conversation</h2>
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-slate-200 bg-white/60 p-4">
+                  {simulationSession && (
+                    <TranscriptThread
+                      messages={messages}
+                      firstAssistantIndex={firstAssistantIndex}
+                      stakeholderName={stakeholderName}
+                      stakeholderRole={stakeholderRole}
+                      isLoading={isLoading}
+                      messagesEndRef={messagesEndRef}
+                    />
+                  )}
+                </div>
+              </section>
 
-            {messages.map((msg, i) => {
-              const isAssistant = msg.role === "assistant";
-              const isFirstAssistant = i === firstAssistantIndex;
-
-              if (isAssistant) {
-                if (isFirstAssistant) {
-                  return null;
-                }
-
-                return (
-                  <article key={i} className="max-w-[92%]">
-                    <p className="mb-1 text-xs font-medium text-slate-500">
-                      {stakeholderName}
-                    </p>
-                    <div className="rounded-xl rounded-tl-sm border border-slate-200 bg-white px-4 py-3">
-                      <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-slate-800">
-                        {msg.content}
+              <div className="feedback-panel min-h-0 space-y-6 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto">
+                {feedback.coachingAvailable ? (
+                  <>
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-900">Coaching</h2>
+                      <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                        Here&apos;s what you did well, what you could say differently,
+                        and where to focus next.
                       </p>
                     </div>
-                  </article>
-                );
-              }
 
-              return (
-                <div key={i} className="flex justify-end pl-12 sm:pl-20">
-                  <div className="max-w-[85%] rounded-xl rounded-br-sm bg-[var(--user-bubble)] px-4 py-3 text-[15px] leading-relaxed text-[var(--user-text)]">
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
-                  </div>
-                </div>
-              );
-            })}
+                    {feedback.confidenceNote && (
+                      <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                        {feedback.confidenceNote}
+                      </p>
+                    )}
 
-            {isLoading && (
-              <div className="max-w-[92%] rounded-xl border border-slate-200 bg-white px-4 py-3">
-                <LoadingIndicator />
+                    {feedback.whatWorked.length > 0 && (
+                      <section className="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
+                        <h3 className="text-sm font-medium text-slate-900">What Worked</h3>
+                        <WhatWorkedList items={feedback.whatWorked} />
+                      </section>
+                    )}
+
+                    <section className="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
+                      <h3 className="text-sm font-medium text-slate-900">
+                        What Could Strengthen the Conversation
+                      </h3>
+                      <StrengthenConversationList items={feedback.strengthenConversation} />
+                    </section>
+
+                    {feedback.biggestStrength && (
+                      <SkillHighlightCard highlight={feedback.biggestStrength} />
+                    )}
+
+                    {feedback.growthOpportunity && (
+                      <GrowthOpportunityCard opportunity={feedback.growthOpportunity} />
+                    )}
+                  </>
+                ) : (
+                  <ConversationReflectionPanel />
+                )}
               </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          {feedback && (
-            <div className="feedback-panel sim-card min-h-0 flex-1 space-y-8 p-8">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Coaching Reflection
-                </h2>
-                <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                  Narrative feedback grounded in what you did and how the
-                  conversation unfolded.
-                </p>
-              </div>
-
-              <section className="rounded-2xl bg-slate-50/80 p-5">
-                <h3 className="text-sm font-medium text-slate-900">
-                  Overall Assessment
-                </h3>
-                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700">
-                  {feedback.outcome && (
-                    <>
-                      <span className="font-medium">{feedback.outcome}.</span>{" "}
-                    </>
-                  )}
-                  {feedback.overallAssessment}
-                </p>
-              </section>
-
-              {feedback.confidenceNote && (
-                <section className="rounded-xl border border-slate-200 bg-white p-5">
-                  <p className="text-sm leading-relaxed text-slate-700">
-                    {feedback.confidenceNote}
-                  </p>
-                </section>
-              )}
-
-              {feedback.competencyFeedbacks.length > 0 && (
-              <section className="space-y-3">
-                <h3 className="text-sm font-medium text-slate-900">Competencies</h3>
-                {feedback.competencyFeedbacks.map((comp) => (
-                  <CompetencyAccordion key={comp.key} comp={comp} />
-                ))}
-              </section>
-              )}
-
-              {feedback.strengths.length > 0 && (
-                <section className="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
-                  <h3 className="text-sm font-medium text-slate-900">Strengths</h3>
-                  <FeedbackBulletList items={feedback.strengths} />
-                </section>
-              )}
-
-              {feedback.developmentAreas.length > 0 && (
-                <section className="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
-                  <h3 className="text-sm font-medium text-slate-900">
-                    Development Areas
-                  </h3>
-                  <FeedbackBulletList items={feedback.developmentAreas} />
-                </section>
-              )}
-
-              {feedback.scenarioInsights.length > 0 && (
-                <section className="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
-                  <h3 className="text-sm font-medium text-slate-900">
-                    Scenario Insights
-                  </h3>
-                  <FeedbackBulletList items={feedback.scenarioInsights} />
-                </section>
-              )}
             </div>
+          ) : (
+            messages.length > 0 && (
+              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+                {simulationSession && firstAssistantIndex >= 0 && (
+                  <OpeningMessageCard
+                    name={stakeholderName}
+                    role={stakeholderRole}
+                    content={messages[firstAssistantIndex].content}
+                  />
+                )}
+
+                {messages.map((msg, i) => {
+                  const isAssistant = msg.role === "assistant";
+                  const isFirstAssistant = i === firstAssistantIndex;
+
+                  if (isAssistant) {
+                    if (isFirstAssistant) return null;
+
+                    return (
+                      <article key={i} className="max-w-[92%]">
+                        <p className="mb-1 text-xs font-medium text-slate-500">
+                          {stakeholderName}
+                        </p>
+                        <div className="rounded-xl rounded-tl-sm border border-slate-200 bg-white px-4 py-3">
+                          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-slate-800">
+                            {msg.content}
+                          </p>
+                        </div>
+                      </article>
+                    );
+                  }
+
+                  return (
+                    <div key={i} className="flex justify-end pl-12 sm:pl-20">
+                      <div className="max-w-[85%] rounded-xl rounded-br-sm bg-[var(--user-bubble)] px-4 py-3 text-[15px] leading-relaxed text-[var(--user-text)]">
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {isLoading && (
+                  <div className="max-w-[92%] rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <LoadingIndicator />
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
+              </div>
+            )
           )}
         </main>
       </div>
@@ -836,7 +833,7 @@ export default function Home() {
               placeholder="Type your response…"
               rows={1}
               disabled={isLoading || !inputEnabled}
-              className="max-h-32 min-h-[44px] flex-1 resize-none rounded-lg border-0 bg-transparent px-3 py-2.5 text-[15px] leading-relaxed outline-none placeholder:text-slate-400 disabled:opacity-60"
+              className="min-h-[44px] max-h-[200px] flex-1 resize-none overflow-y-hidden rounded-lg border-0 bg-transparent px-3 py-2.5 text-[15px] leading-relaxed outline-none placeholder:text-slate-400 disabled:opacity-60"
             />
             <button
               type="submit"
